@@ -330,8 +330,8 @@ fieldset.perms legend{font-size:12.5px;color:var(--muted);padding:0 4px}
 .pm h1{font-family:var(--f-display);font-size:20pt;margin:2px 0 0}
 .pm h2{font-family:var(--f-display);font-size:13pt;margin:16px 0 6px;border-bottom:1.5px solid #111;padding-bottom:3px}
 .pm-k{font-size:9pt;letter-spacing:.18em;text-transform:uppercase;color:#555}
-.pm-h{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:3px solid #111;padding-bottom:10px;margin-bottom:12px}
-.pm-logo{display:flex;align-items:center;gap:8px;color:#333;font-size:9pt;font-weight:600}.pm-logo svg{width:34px;height:34px}
+.pm-h{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:3px solid #111;padding-bottom:10px;margin-bottom:12px}
+.pm-logo{display:flex;align-items:center;color:#333}.pm-logo svg{width:40px;height:40px}.pm-img{max-height:64px;max-width:180px;object-fit:contain}.pm-hc{flex:1;text-align:center;display:flex;flex-direction:column;gap:2px}.pm-hc b{font-size:12pt}.pm-hc span{font-size:10pt;color:#333}.pm-cod{font-size:9pt;border:1px solid #999;padding:4px 8px;white-space:nowrap}
 .pm-t{width:100%;border-collapse:collapse;font-size:10pt}.pm-t th,.pm-t td{border:1px solid #999;padding:5px 7px;text-align:left;vertical-align:top;white-space:normal;background:#fff;color:#111}
 .pm-t th{background:#eee;width:15%;font-weight:600}.pm-ac th{width:auto}
 .pm-p{white-space:pre-wrap;margin:0}
@@ -434,7 +434,7 @@ const AEROS=['Cancún','Cozumel','Mérida','Huatulco','Oaxaca','Tapachula','Vera
 const IVA=0.16;
 
 /* ---------- Almacenamiento local (IndexedDB) ---------- */
-const COLS=['obras','convenios','estimaciones','avances','pendientes','minutas','bitacora','evidencias','documentos','historial'];
+const COLS=['obras','convenios','estimaciones','avances','pendientes','minutas','bitacora','evidencias','documentos','historial','ajustes'];
 const S={config:{ejemplos:false,uid:'u2'},usuarios:[],cola:[],sync:{url:'',key:'',email:'',last:'',on:false}};
 COLS.forEach(c=>S[c]=[]);
 let db=null;
@@ -453,13 +453,13 @@ function put(col,o,accion){const i=S[col].findIndex(x=>x.id===o.id);const prev=i
     if(!prev||ch.length||accion)logH(col,o,accion||(prev?'modificó':'creó'),ch)}
   return o}
 function del(col,id){const x=byId(col,id);if(x)logH(col,x,'eliminó');S[col]=S[col].filter(x=>x.id!==id);persist(col);if(col==='documentos'){delete FILES[id];idbDel('f:'+id)}queue(col,id,true,x?{...x,fotos:undefined}:null)}
-function delObra(id){COLS.slice(1).filter(c=>c!=='historial').forEach(c=>S[c].filter(x=>x.obraId===id).forEach(x=>del(c,x.id)));del('obras',id)}
+function delObra(id){COLS.slice(1).filter(c=>c!=='historial'&&c!=='ajustes').forEach(c=>S[c].filter(x=>x.obraId===id).forEach(x=>del(c,x.id)));del('obras',id)}
 /* ---------- Usuarios, roles y permisos ---------- */
 const ROLES={gerente:'Gerente de infraestructura',coordinador:'Coordinador de infraestructura',coordObra:'Coordinador de obra',supervision:'Coordinador de supervisión',contratista:'Contratista'};
 let U=null;
 const isAdmin=()=>!!U&&(U.rol==='gerente'||U.rol==='coordinador');
 const isExt=()=>!!U&&(U.rol==='contratista'||U.rol==='supervision');
-function visible(col,x){if(isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isExt())return col==='obras'||col==='bitacora';return true}
+function visible(col,x){if(col==='ajustes'||isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isExt())return col==='obras'||col==='bitacora';return true}
 const D=new Proxy({},{get:(_,col)=>(S[col]||[]).filter(x=>visible(col,x))});
 function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())return col==='bitacora';return col!=='obras'&&col!=='historial'}
 function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return false;return col!=='historial'}
@@ -589,7 +589,8 @@ drop policy if exists "editar" on registros;
 create policy "leer" on registros for select to authenticated using (
   es_admin()
   or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial')
-  or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col in ('obras','bitacora')));
+  or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col in ('obras','bitacora'))
+  or col = 'ajustes');
 create policy "crear" on registros for insert to authenticated with check (
   es_admin()
   or (mi_rol() = 'coordObra' and obra_id = mi_obra() and (col <> 'bitacora' or data->>'estado' = 'cargada'))
@@ -826,6 +827,12 @@ config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfi
     ${!cl?`<p class="note">Sin servidor conectado, los usuarios viven solo en este dispositivo. Úsalo para probar cómo ve la app cada rol.</p><button class="btn" data-act="pickUser">Cambiar de usuario (prueba)</button>`:`<div class="row" style="margin-top:12px"><button class="btn" data-act="logout">Cerrar sesión</button></div>`}</div></div>
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Respaldo y datos</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px"><div class="row"><button class="btn" data-act="export">Descargar respaldo</button><button class="btn" data-act="import">Cargar respaldo</button></div><p class="note" style="margin:0">El respaldo incluye registros y fotos. Los archivos de Documentos se guardan aparte en este dispositivo o en la nube.</p><div class="row">${S.config.ejemplos?`<button class="btn danger" data-act="clearDemo">Borrar obras de ejemplo</button>`:`<button class="btn" data-act="reseed">Cargar obras de ejemplo</button>`}</div></div></div>`:''}
   </div>
+  ${isAdmin()?(()=>{const F=fmtImp();return `<div class="card"><div class="card-h"><h2>Formato de impresión</h2></div><div class="card-b"><form id="fmtForm" class="modal" style="box-shadow:none;max-width:none;border:0"><div class="mb" style="padding:0">
+    <div class="fld full"><label for="fmtLogo">Logo para minutas impresas</label><div class="row"><div id="logoPv" style="min-height:48px;display:flex;align-items:center">${F.logo?`<img src="${F.logo}" alt="Logo actual" style="max-height:56px;max-width:180px;background:#fff;padding:4px;border-radius:6px">`:'<span class="note">Sin logo: se usa el ícono de la app.</span>'}</div><input id="fmtLogo" type="file" accept="image/png,image/jpeg,image/svg+xml" data-logoup="1"></div><span class="hint">Sube el archivo oficial del logo (PNG con fondo transparente se ve mejor).</span></div>
+    <div class="fld"><label for="fmtEmp">Empresa</label><input id="fmtEmp" name="empresa" value="${esc(F.empresa||'')}" placeholder="Grupo Aeroportuario del Sureste"></div>
+    <div class="fld"><label for="fmtArea">Área</label><input id="fmtArea" name="area" value="${esc(F.area||'')}" placeholder="Infraestructura"></div>
+    <div class="fld"><label for="fmtCod">Código del formato (opcional)</label><input id="fmtCod" name="codigo" value="${esc(F.codigo||'')}"></div>
+  </div><div class="mf" style="padding:12px 0 0;border:0">${F.logo?`<button type="button" class="btn" data-act="logoDel">Quitar logo</button>`:''}<button class="btn pri">Guardar formato</button></div></form></div></div>`})():''}
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Usuarios y permisos</h2><button class="btn sm" data-act="newUser">${ic('plus')}Agregar usuario</button></div><div class="card-b">
     <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión solo suben notas de bitácora de su contrato. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo.</p>
     <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Contrato</th>${cl?'<th>Correo</th>':''}<th></th></tr></thead><tbody>${users.map(u=>`<tr class="click" data-user="${esc(u.id)}"><td><b>${esc(u.nombre)}</b></td><td>${esc(ROLES[u.rol]||u.rol)}</td><td>${u.obraId?esc(obraCorto(u.obraId)):'Todos'}</td>${cl?`<td>${esc(u.email)}</td>`:''}<td class="r">${ic('edit','width="16" height="16"')}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}
@@ -947,6 +954,7 @@ const ACT={
   logout:()=>{if(S.sync.on)Sync.logout();else{U=null;render()}},
   pickUser:()=>{$('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:480px"><div class="mh"><h2>Entrar como</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr">${S.usuarios.map(u=>`<button class="btn" style="justify-content:flex-start;text-align:left;white-space:normal" data-as="${u.id}"><span class="avatar" style="width:30px;height:30px;font-size:12px">${initials(u.nombre)}</span><span><b>${esc(u.nombre)}</b><br><span class="note">${esc(ROLES[u.rol])}${u.obraId?' · '+esc(obraCorto(u.obraId)):''}</span></span></button>`).join('')}</div></div></div>`},
   newUser:()=>userForm(null),
+  logoDel:()=>{const F={...fmtImp(),id:'formato'};F.logo='';put('ajustes',F);logoBuf=null;render();toast('Logo quitado')},
   printMin:()=>{const b=document.querySelector('[data-act="printMin"]');const m=b&&byId('minutas',b.dataset.min);if(m)printMinuta(m)},
   copySql:()=>{try{navigator.clipboard.writeText(SQL).then(()=>toast('Código copiado'),()=>selectSql())}catch(e){selectSql()}},
 };
@@ -982,10 +990,10 @@ async function saveUserForm(f){const cl=S.sync.on&&S.sync.url;const nombre=f.nom
     Sync.perfiles=[...Sync.perfiles.filter(z=>z.email!==email),{email,nombre,rol,obra_id:obraId||null}]}
   else{const id=f.dataset.id;if(id){Object.assign(S.usuarios.find(z=>z.id===id),{nombre,rol,obraId});if(U&&U.id===id)U=S.usuarios.find(z=>z.id===id)}else S.usuarios.push({id:uid(),nombre,rol,obraId,email:''});saveUsers()}
   closeModal();render();toast('Usuario guardado')}
-function printMinuta(m){const o=byId('obras',m.obraId)||{};const ac=S.pendientes.filter(p=>p.minutaId===m.id);
+function printMinuta(m){const o=byId('obras',m.obraId)||{};const F=fmtImp();const ac=S.pendientes.filter(p=>p.minutaId===m.id);
   const firmas=String(m.asistentes||'').split(/[\n,;]+/).map(x=>x.trim()).filter(Boolean);
   const el=$('#printArea');el.innerHTML=`<div class="pm">
-  <div class="pm-h"><div><div class="pm-k">Minuta de reunión</div><h1>${esc(m.titulo)}</h1></div><div class="pm-logo">${LOGO}<span>Control de Obras</span></div></div>
+  <div class="pm-h">${F.logo?`<img class="pm-img" src="${F.logo}" alt="Logo">`:`<div class="pm-logo">${LOGO}</div>`}<div class="pm-hc">${F.empresa?`<b>${esc(F.empresa)}</b>`:''}${F.area?`<span>${esc(F.area)}</span>`:''}<div class="pm-k">Minuta de reunión</div><h1>${esc(m.titulo)}</h1></div>${F.codigo?`<div class="pm-cod">${esc(F.codigo)}</div>`:''}</div>
   <table class="pm-t"><tr><th>Obra</th><td colspan="3">${esc(o.nombre||'')}</td></tr><tr><th>Contrato</th><td>${esc(o.numero||'')}</td><th>Aeropuerto</th><td>${esc(o.aeropuerto||'')}</td></tr>
   <tr><th>Contratista</th><td>${esc(o.contratista||'')}</td><th>Supervisión</th><td>${esc(o.supervision||'')}</td></tr><tr><th>Fecha y hora</th><td>${fDT(m.fecha)}</td><th>Lugar</th><td>${esc(m.lugar||'')}</td></tr></table>
   <h2>Asistentes</h2><p class="pm-p">${esc(m.asistentes||'—')}</p>
@@ -994,6 +1002,9 @@ function printMinuta(m){const o=byId('obras',m.obraId)||{};const ac=S.pendientes
   <h2>Firmas</h2><div class="pm-f">${(firmas.length?firmas:['','','']).map(f=>`<div><span></span>${esc(f)}</div>`).join('')}</div>
   <div class="pm-pie">Impreso el ${fDT(isoT(new Date()))} por ${esc(U?U.nombre:'')}</div></div>`;
   closeModal();setTimeout(()=>{try{window.print()}catch(e){}if(inClaude)toast('La vista previa no permite imprimir. Usa la app instalada o tu enlace.')},150)}
+const fmtImp=()=>S.ajustes.find(x=>x.id==='formato')||{};
+let logoBuf=null;
+function logoToData(file){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,600/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/png'))};im.onerror=()=>res(null);im.src=r.result};r.readAsDataURL(file)})}
 function showMinuta(m){const ac=D.pendientes.filter(p=>p.minutaId===m.id);
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:720px"><div class="mh"><h2>${esc(m.titulo)}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr"><div class="kv"><div>Obra</div><div style="white-space:normal">${esc(obraTxt(m.obraId))}</div><div>Fecha</div><div class="num">${fDT(m.fecha)}</div><div>Lugar</div><div>${esc(m.lugar||'—')}</div><div>Asistentes</div><div style="white-space:pre-wrap">${esc(m.asistentes||'—')}</div><div>Temas</div><div style="white-space:pre-wrap">${esc(m.temas||'—')}</div></div><h3 style="font-size:18px;margin-top:6px">Acuerdos</h3>${penList(ac,false)}</div><div class="mf"><button class="btn" data-act="printMin" data-min="${m.id}" style="margin-right:auto">${ic('file')}Imprimir</button><button class="btn" data-addac="${m.id}">${ic('plus')}Agregar acuerdo</button><button class="btn pri" data-edit="minutas:${m.id}">${ic('edit')}Editar minuta</button></div></div></div>`}
 function showEv(x){const fs=x.fotos||[];const g=x.gps&&/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(x.gps.trim())?x.gps.replace(/\s/g,''):'';
@@ -1031,12 +1042,14 @@ document.addEventListener('click',e=>{const t=e.target;
 });
 document.addEventListener('change',async ev=>{const t=ev.target;
   if(t.id==='obraFil'){V.obra=t.value;render();return}
+  if(t.dataset.logoup&&t.files[0]){logoBuf=await logoToData(t.files[0]);if(logoBuf)$('#logoPv').innerHTML=`<img src="${logoBuf}" alt="Logo nuevo" style="max-height:56px;max-width:180px;background:#fff;padding:4px;border-radius:6px"><span class="note" style="margin-left:8px">Guarda para aplicarlo</span>`;return}
   if(t.dataset.photos){for(const f of t.files){const p=await compress(f);if(p)photoBuf.push(p)}$('#pv').innerHTML=photoBuf.map(p=>`<img src="${p}" alt="">`).join('');t.value='';return}
   if(t.dataset.file){fileBuf=t.files[0]||null;if(fileBuf){$('#fileH').textContent=fileBuf.name+' · '+(fileBuf.size/1048576).toFixed(1)+' MB';const n=$('#f-nombre');if(n&&!n.value)n.value=fileBuf.name.replace(/\.[^.]+$/,'')}return}
   if(t.id==='importFile'&&t.files[0]){try{const d=JSON.parse(await t.files[0].text());if(d.app!=='control-obras')throw 0;COLS.forEach(c=>{S[c]=Array.isArray(d[c])?d[c]:[];persist(c);S[c].forEach(x=>queue(c,x.id))});if(d.config){S.config={...S.config,...d.config};persist('config')}go('panel');toast('Respaldo cargado')}catch(e){toast('Ese archivo no es un respaldo de esta app')}t.value=''}
 });
 document.addEventListener('submit',async ev=>{const f=ev.target;
   if(f.id==='userForm'){ev.preventDefault();saveUserForm(f)}
+  if(f.id==='fmtForm'){ev.preventDefault();if(!isAdmin())return;const F={...fmtImp(),id:'formato',empresa:f.empresa.value.trim(),area:f.area.value.trim(),codigo:f.codigo.value.trim()};if(logoBuf)F.logo=logoBuf;put('ajustes',F);logoBuf=null;render();toast('Formato guardado')}
   if(f.id==='loginForm'){ev.preventDefault();const er=$('#lgErr');er.textContent='Entrando…';const m=await Sync.login(f.email.value.trim(),f.pw.value);if(m)er.textContent='No se pudo entrar: '+m;else if(!U)er.textContent=Sync.msg||'Tu usuario no tiene un rol asignado.';else go(isExt()?'bitacora':'panel')}
   if(f.id==='syncForm'){ev.preventDefault();const url=f.url.value.trim().replace(/\/+$/,''),key=f.key.value.trim(),email=f.email.value.trim(),pw=f.pw.value;const er=$('#syncErr');
     if(!/^https:\/\/.+/.test(url)||!key){er.textContent='Escribe la URL (empieza con https://) y la clave pública de tu proyecto.';return}
