@@ -319,7 +319,34 @@ fieldset.perms legend{font-size:12.5px;color:var(--muted);padding:0 4px}
 .sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--off)}
 .sync-dot.on{background:var(--ok)}
 .net.live i{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 30%,transparent)}
+#printArea{display:none}
+@media print{
+  body{background:#fff!important;color:#000!important}
+  .app,.bnav,.fab,#modalRoot,.toast{display:none!important}
+  #printArea{display:block!important}
+  @page{size:letter;margin:16mm 14mm}
+}
+.pm{font-family:var(--f-body);color:#111;font-size:11.5pt;line-height:1.45}
+.pm h1{font-family:var(--f-display);font-size:20pt;margin:2px 0 0}
+.pm h2{font-family:var(--f-display);font-size:13pt;margin:16px 0 6px;border-bottom:1.5px solid #111;padding-bottom:3px}
+.pm-k{font-size:9pt;letter-spacing:.18em;text-transform:uppercase;color:#555}
+.pm-h{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:3px solid #111;padding-bottom:10px;margin-bottom:12px}
+.pm-logo{display:flex;align-items:center;color:#333}.pm-logo svg{width:40px;height:40px}.pm-img{max-height:64px;max-width:180px;object-fit:contain}.pm-hc{flex:1;text-align:center;display:flex;flex-direction:column;gap:2px}.pm-hc b{font-size:12pt}.pm-hc span{font-size:10pt;color:#333}.pm-cod{font-size:9pt;border:1px solid #999;padding:4px 8px;white-space:nowrap}
+.pm-t{width:100%;border-collapse:collapse;font-size:10pt}.pm-t th,.pm-t td{border:1px solid #999;padding:5px 7px;text-align:left;vertical-align:top;white-space:normal;background:#fff;color:#111}
+.pm-t th{background:#eee;width:15%;font-weight:600}.pm-ac th{width:auto}
+.pm-p{white-space:pre-wrap;margin:0}.pm-as td{height:42px;vertical-align:middle}.pm-as th:first-child,.pm-as td:first-child{width:6%;text-align:center}.pm-as th:last-child{width:24%}
+.pm-f{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 22px}.pm-f div{text-align:center;font-size:9.5pt;break-inside:avoid}.pm-f span{display:block;border-top:1px solid #111;margin:44px 0 4px}
+.pv-ov{align-items:stretch;justify-content:center;padding:16px}
+.pv-box{background:var(--surface-2);border-radius:14px;display:flex;flex-direction:column;width:min(900px,100%);max-height:calc(100vh - 32px);overflow:hidden;box-shadow:var(--shadow)}
+.pv-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.pv-sp{flex:1}
+.pv-scroll{overflow-y:auto;overflow-x:hidden;padding:12px;flex:1}
+.pv-paper{width:816px;min-height:1056px;box-sizing:border-box;padding:60px 53px;background:#fff;color:#111;margin:0 auto;box-shadow:0 2px 12px rgba(0,0,0,.18);transform-origin:top left}
+@media (max-width:860px){.pv-ov{padding:0}.pv-box{border-radius:0;max-height:100vh;height:100vh}.pv-paper{margin:0}}
+.pm-pie{margin-top:24px;font-size:8.5pt;color:#555;text-align:right}
 body.locked .side,body.locked .bnav,body.locked .fab,body.locked .top .search{display:none!important}
+.as-list{display:flex;flex-direction:column;gap:8px}.as-row{display:grid;grid-template-columns:1.3fr 1fr 1fr auto;gap:6px;align-items:center}.as-row input{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 9px;min-width:0;width:100%}
+@media (max-width:560px){.as-row{grid-template-columns:1fr 1fr auto}.as-row input[data-k=nombre]{grid-column:1/-1}}
 .badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:var(--bad);color:#fff;font-size:11.5px;font-weight:700;margin-left:auto}
 @media (max-width:860px){.sumgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
@@ -348,6 +375,7 @@ body.locked .side,body.locked .bnav,body.locked .fab,body.locked .top .search{di
 <nav class="bnav" id="bnav" aria-label="Menú inferior"></nav>
 <button class="fab" id="fab" aria-label="Agregar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg></button>
 <div id="modalRoot"></div>
+<div id="printArea"></div>
 <input type="file" id="importFile" accept="application/json" hidden>
 <script>
 (function(){
@@ -415,7 +443,7 @@ const AEROS=['Cancún','Cozumel','Mérida','Huatulco','Oaxaca','Tapachula','Vera
 const IVA=0.16;
 
 /* ---------- Almacenamiento local (IndexedDB) ---------- */
-const COLS=['obras','convenios','estimaciones','avances','pendientes','minutas','bitacora','evidencias','documentos','historial'];
+const COLS=['obras','convenios','estimaciones','avances','pendientes','minutas','bitacora','evidencias','documentos','historial','ajustes'];
 const S={config:{ejemplos:false,uid:'u2'},usuarios:[],cola:[],sync:{url:'',key:'',email:'',last:'',on:false}};
 COLS.forEach(c=>S[c]=[]);
 let db=null;
@@ -434,21 +462,21 @@ function put(col,o,accion){const i=S[col].findIndex(x=>x.id===o.id);const prev=i
     if(!prev||ch.length||accion)logH(col,o,accion||(prev?'modificó':'creó'),ch)}
   return o}
 function del(col,id){const x=byId(col,id);if(x)logH(col,x,'eliminó');S[col]=S[col].filter(x=>x.id!==id);persist(col);if(col==='documentos'){delete FILES[id];idbDel('f:'+id)}queue(col,id,true,x?{...x,fotos:undefined}:null)}
-function delObra(id){COLS.slice(1).filter(c=>c!=='historial').forEach(c=>S[c].filter(x=>x.obraId===id).forEach(x=>del(c,x.id)));del('obras',id)}
+function delObra(id){COLS.slice(1).filter(c=>c!=='historial'&&c!=='ajustes').forEach(c=>S[c].filter(x=>x.obraId===id).forEach(x=>del(c,x.id)));del('obras',id)}
 /* ---------- Usuarios, roles y permisos ---------- */
 const ROLES={gerente:'Gerente de infraestructura',coordinador:'Coordinador de infraestructura',coordObra:'Coordinador de obra',supervision:'Coordinador de supervisión',contratista:'Contratista'};
 let U=null;
 const isAdmin=()=>!!U&&(U.rol==='gerente'||U.rol==='coordinador');
 const isExt=()=>!!U&&(U.rol==='contratista'||U.rol==='supervision');
-function visible(col,x){if(isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isExt())return col==='obras'||col==='bitacora';return true}
+function visible(col,x){if(col==='ajustes'||isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isExt())return col==='obras'||col==='bitacora';return true}
 const D=new Proxy({},{get:(_,col)=>(S[col]||[]).filter(x=>visible(col,x))});
 function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())return col==='bitacora';return col!=='obras'&&col!=='historial'}
-function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(isExt())return col==='bitacora'&&x.estado==='cargada'&&x.porId===U.id;if(col==='bitacora')return x.estado!=='aprobada'||x.porId===U.id;return col!=='historial'}
+function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return false;return col!=='historial'}
 const COL_L={obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
 const refTxt=(col,o)=>col==='estimaciones'?'Estimación '+o.numero:col==='avances'?'Corte del '+fD(o.fecha):col==='bitacora'?(o.folio?'Nota '+o.folio:'Nota sin folio')+' · '+(o.tipo||''):col==='convenios'?'Convenio '+(o.numero||''):String(o.titulo||o.nombre||o.concepto||o.numero||'');
 const SKIP=['upd','por','porId','ruta','mime','size','ejemplo','aprobadoPor','fechaAprob'];
 function fLabel(col,k){const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);return f?f[1]:({estado:'Estado',folio:'Folio',motivo:'Motivo de rechazo',archivo:'Archivo'}[k]||k)}
-function fmtF(col,k,v){if(v==null||v==='')return '—';if(k==='estado'||k==='prioridad'){const m={...OB_EST,...ES_EST,...PE_EST,...BIT_EST,...PRIO}[v];return m?m[0]:String(v)}const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);if(f&&f[2]==='money')return money(v);if(f&&f[2]==='date')return fD(v);if(f&&f[2]==='datetime-local')return fDT(v);if(f&&f[2]==='obra')return obraCorto(v);return fmtV(v)}
+function fmtF(col,k,v){if(v==null||v==='')return '—';if(k==='asistentes')return asList({asistentes:v}).map(a=>a.nombre).join(', ')||'—';if(k==='estado'||k==='prioridad'){const m={...OB_EST,...ES_EST,...PE_EST,...BIT_EST,...PRIO}[v];return m?m[0]:String(v)}const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);if(f&&f[2]==='money')return money(v);if(f&&f[2]==='date')return fD(v);if(f&&f[2]==='datetime-local')return fDT(v);if(f&&f[2]==='obra')return obraCorto(v);return fmtV(v)}
 function fmtV(v){if(v==null||v==='')return '—';if(Array.isArray(v))return v.length+' foto(s)';const t=String(v);return t.length>90?t.slice(0,90)+'…':t}
 function logH(col,o,accion,cambios){if(col==='historial')return;const oid=col==='obras'?o.id:o.obraId;if(!oid)return;const now=new Date().toISOString();const h={id:uid(),obraId:oid,fecha:now,upd:now,usuario:U?U.nombre:'—',rol:U?U.rol:'',accion,tipo:COL_L[col]||col,ref:refTxt(col,o),cambios:cambios||[]};h.por=h.usuario;S.historial.unshift(h);persist('historial');queue('historial',h.id)}
 const saveUsers=()=>idbSet('usuarios',S.usuarios);
@@ -511,6 +539,8 @@ function seed(){
   M.forEach(([o,d,t,l,as,tm,acs],i)=>{const id='mi'+i;S.minutas.push({id,obraId:o,fecha:off(d,10),titulo:t,lugar:l,asistentes:as,temas:tm});acs.forEach(([tx,r,dd,e],j)=>S.pendientes.push({id:id+'ac'+j,obraId:o,minutaId:id,origen:'acuerdo',titulo:tx,responsable:r,compromiso:off(d+dd+7),prioridad:'media',estado:e,notas:''}))});
   const B=[['o1',-1,'Avance','Se concluye tendido de carpeta asfáltica en tramo 1+200 a 1+450. Personal: 34. Equipo: 2 finishers, 3 compactadores.'],['o1',-2,'Instrucción','Se instruye al contratista retirar material producto de fresado de franja de seguridad antes de las 05:30.'],['o1',-4,'Clima','Lluvia de 02:10 a 03:40; se suspenden trabajos de riego de liga.'],['o2',-1,'Avance','Colado de losas 12 a 18 en eje C, MR-45.'],['o2',-6,'Solicitud','El contratista solicita liberación del frente norte.'],['o3',-2,'Incidencia','Retraso en entrega de cancelería; proveedor confirma arribo en 3 semanas.'],['o4',-12,'Cierre','Se da por terminada la obra; pendientes menores en lista de observaciones.']];
   const fol={};B.forEach(([o,d,t,x],i)=>{fol[o]=(fol[o]||0)+1;S.bitacora.push({id:'b'+i,obraId:o,folio:0,fecha:off(d,7+i%5),tipo:t,texto:x,fotos:[]})});
+  const ASI={mi0:[['Ing. Ricardo Pech','Residente de obra','ASUR'],['Ing. Luis Chan','Superintendente','Pavimentos del Sureste'],['Ing. Sofía Uc','Coordinadora de supervisión','Supervisión Técnica Peninsular']],mi1:[['Arq. Mariana Canché','Coordinadora de obra','ASUR'],['Lic. Pedro Novelo','Jefe de operaciones','ASUR'],['Ing. Raúl Pérez','Superintendente','Constructora Itzáes']],mi2:[['Ing. Jorge Ku','Residente de obra','ASUR'],['Arq. Ana Poot','Superintendente','Edificaciones Caribe']]};
+  S.minutas.forEach(m=>{if(ASI[m.id])m.asistentes=ASI[m.id].map(([nombre,cargo,empresa])=>({nombre,cargo,empresa}))});
   S.bitacora.forEach(b=>{b.estado='aprobada';b.por='Residencia de obra'});
   S.bitacora.push({id:'bx1',obraId:'o1',folio:0,fecha:off(0,9),tipo:'Avance',texto:'Se reporta tendido de carpeta en tramo 1+450 a 1+600. Personal: 30. Equipo: 2 finishers.',fotos:[],estado:'cargada',por:'Pavimentos del Sureste',porId:'u4'},{id:'bx2',obraId:'o1',folio:0,fecha:off(-1,16),tipo:'Solicitud',texto:'Se solicita autorización para trabajos en franja de seguridad el sábado de 03:00 a 05:30.',fotos:[],estado:'revision',por:'Supervisión Técnica Peninsular',porId:'u5'},{id:'bx3',obraId:'o1',folio:0,fecha:off(-2,18),tipo:'Avance',texto:'Se concluye riego de liga en tramo 0+900 a 1+300.',fotos:[],estado:'rechazada',motivo:'El tramo reportado no coincide con el levantamiento de supervisión. Corregir cadenamientos y volver a subir.',por:'Pavimentos del Sureste',porId:'u4'});
   S.obras.forEach(o=>{S.bitacora.filter(b=>b.obraId===o.id&&b.estado==='aprobada').sort((a,b)=>a.fecha<b.fecha?-1:1).forEach((b,i)=>b.folio=i+1)});
@@ -570,20 +600,21 @@ drop policy if exists "editar" on registros;
 create policy "leer" on registros for select to authenticated using (
   es_admin()
   or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial')
-  or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col in ('obras','bitacora')));
+  or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col in ('obras','bitacora'))
+  or col = 'ajustes');
 create policy "crear" on registros for insert to authenticated with check (
   es_admin()
-  or (mi_rol() = 'coordObra' and obra_id = mi_obra())
+  or (mi_rol() = 'coordObra' and obra_id = mi_obra() and (col <> 'bitacora' or data->>'estado' = 'cargada'))
   or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra()
       and (col = 'historial' or (col = 'bitacora' and data->>'estado' = 'cargada'))));
 create policy "editar" on registros for update to authenticated
   using (
     es_admin()
-    or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial')
+    or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial' and (col <> 'bitacora' or data->>'estado' = 'cargada'))
     or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada'))
   with check (
     es_admin()
-    or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial')
+    or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial' and (col <> 'bitacora' or data->>'estado' = 'cargada'))
     or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada'));
 
 -- Tu propio usuario como coordinador (cambia el correo y el nombre):
@@ -775,7 +806,7 @@ pendientes(){const it=D.pendientes.filter(p=>(!V.obra||p.obraId===V.obra)&&(V.f=
 
 minutas(){const it=ofObra('minutas',V.obra);return `${phead('Minutas','Reuniones de obra y los acuerdos que generan',obraSel()+`<button class="btn pri hide-m" data-act="newMin">${ic('plus')}Nueva minuta</button>`)}<div class="card"><div class="card-b" style="padding-top:8px">${minList(it,!V.obra)}</div></div>`},
 
-bitacora(){const it=ofObra('bitacora',V.obra).filter(b=>!V.f||(V.f==='pend'?['cargada','revision'].includes(b.estado):(b.estado||'aprobada')===V.f));return `${phead('Bitácora',isExt()?'Las notas que subas quedan como cargadas hasta que el coordinador las apruebe':'El folio se asigna al aprobar la nota',obraSel()+`<button class="btn pri hide-m" data-act="newBit">${ic('plus')}Nueva nota</button>`)}${chips([['','Todas'],['pend','Por aprobar'],['aprobada','Aprobadas'],['rechazada','Rechazadas']])}<div class="card"><div class="card-b" style="padding-top:8px">${bitList(it,!V.obra)}</div></div>`},
+bitacora(){const it=ofObra('bitacora',V.obra).filter(b=>!V.f||(V.f==='pend'?['cargada','revision'].includes(b.estado):(b.estado||'aprobada')===V.f));return `${phead('Bitácora',isAdmin()?'El folio se asigna al aprobar la nota':'Tus notas quedan como cargadas hasta que el coordinador de infraestructura las apruebe',obraSel()+`<button class="btn pri hide-m" data-act="newBit">${ic('plus')}Nueva nota</button>`)}${chips([['','Todas'],['pend','Por aprobar'],['aprobada','Aprobadas'],['rechazada','Rechazadas']])}<div class="card"><div class="card-b" style="padding-top:8px">${bitList(it,!V.obra)}</div></div>`},
 
 historial(){const it=ofObra('historial',V.obra);return `${phead('Historial de movimientos','Quién creó, modificó, aprobó o eliminó información en cada contrato',obraSel())}<div class="card"><div class="card-b" style="padding-top:8px">${histList(it,!V.obra)}</div></div>`},
 
@@ -807,8 +838,14 @@ config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfi
     ${!cl?`<p class="note">Sin servidor conectado, los usuarios viven solo en este dispositivo. Úsalo para probar cómo ve la app cada rol.</p><button class="btn" data-act="pickUser">Cambiar de usuario (prueba)</button>`:`<div class="row" style="margin-top:12px"><button class="btn" data-act="logout">Cerrar sesión</button></div>`}</div></div>
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Respaldo y datos</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px"><div class="row"><button class="btn" data-act="export">Descargar respaldo</button><button class="btn" data-act="import">Cargar respaldo</button></div><p class="note" style="margin:0">El respaldo incluye registros y fotos. Los archivos de Documentos se guardan aparte en este dispositivo o en la nube.</p><div class="row">${S.config.ejemplos?`<button class="btn danger" data-act="clearDemo">Borrar obras de ejemplo</button>`:`<button class="btn" data-act="reseed">Cargar obras de ejemplo</button>`}</div></div></div>`:''}
   </div>
+  ${isAdmin()?(()=>{const F=fmtImp();return `<div class="card"><div class="card-h"><h2>Formato de impresión</h2></div><div class="card-b"><form id="fmtForm" class="modal" style="box-shadow:none;max-width:none;border:0"><div class="mb" style="padding:0">
+    <div class="fld full"><label for="fmtLogo">Logo para minutas impresas</label><div class="row"><div id="logoPv" style="min-height:48px;display:flex;align-items:center">${F.logo?`<img src="${F.logo}" alt="Logo actual" style="max-height:56px;max-width:180px;background:#fff;padding:4px;border-radius:6px">`:'<span class="note">Sin logo: se usa el ícono de la app.</span>'}</div><input id="fmtLogo" type="file" accept="image/png,image/jpeg,image/svg+xml" data-logoup="1"></div><span class="hint">Sube el archivo oficial del logo (PNG con fondo transparente se ve mejor).</span></div>
+    <div class="fld"><label for="fmtEmp">Empresa</label><input id="fmtEmp" name="empresa" value="${esc(F.empresa||'')}" placeholder="Grupo Aeroportuario del Sureste"></div>
+    <div class="fld"><label for="fmtArea">Área</label><input id="fmtArea" name="area" value="${esc(F.area||'')}" placeholder="Infraestructura"></div>
+    <div class="fld"><label for="fmtCod">Código del formato (opcional)</label><input id="fmtCod" name="codigo" value="${esc(F.codigo||'')}"></div>
+  </div><div class="mf" style="padding:12px 0 0;border:0">${F.logo?`<button type="button" class="btn" data-act="logoDel">Quitar logo</button>`:''}<button class="btn pri">Guardar formato</button></div></form></div></div>`})():''}
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Usuarios y permisos</h2><button class="btn sm" data-act="newUser">${ic('plus')}Agregar usuario</button></div><div class="card-b">
-    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión solo suben notas de bitácora de su contrato.</p>
+    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión solo suben notas de bitácora de su contrato. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo.</p>
     <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Contrato</th>${cl?'<th>Correo</th>':''}<th></th></tr></thead><tbody>${users.map(u=>`<tr class="click" data-user="${esc(u.id)}"><td><b>${esc(u.nombre)}</b></td><td>${esc(ROLES[u.rol]||u.rol)}</td><td>${u.obraId?esc(obraCorto(u.obraId)):'Todos'}</td>${cl?`<td>${esc(u.email)}</td>`:''}<td class="r">${ic('edit','width="16" height="16"')}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}
   ${isAdmin()||!cl?`<div class="card"><div class="card-h"><h2>Sincronización en tiempo real</h2>${stPill()}</div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
     <p style="margin:0;max-width:70ch">Conecta la app a un proyecto gratuito de Supabase para que todo tu equipo vea los mismos avances, estimaciones, pendientes y evidencias al momento. Sin señal se sigue capturando y se sube solo al regresar la conexión.</p>
@@ -861,12 +898,14 @@ const FORMS={
   estimaciones:{t:'Estimación',f:[['obraId','Obra','obra',1,null,1],['numero','No. de estimación','number',1],['estado','Estado','select',0,Object.entries(ES_EST).map(([k,v])=>[k,v[0]])],['periodoIni','Periodo del','date'],['periodoFin','Periodo al','date',1],['importe','Importe ejecutado (sin IVA)','money',1],['amort','Amortización de anticipo','money',0,null,0,'Vacío = se calcula con el % de anticipo'],['retenciones','Retenciones','money'],['penas','Penas convencionales','money'],['fechaPres','Fecha de presentación','date'],['fechaPago','Fecha de pago','date'],['notas','Observaciones','textarea',0,null,1]]},
   avances:{t:'Corte de avance',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha de corte','date',1],['programado','Avance programado acumulado (%)','number',1],['real','Avance físico real acumulado (%)','number',1],['nota','Nota','textarea',0,null,1]]},
   pendientes:{t:'Pendiente',f:[['obraId','Obra','obra',1,null,1],['titulo','Actividad o acuerdo','text',1,null,1],['responsable','Responsable','text'],['compromiso','Fecha compromiso','date'],['prioridad','Prioridad','select',0,Object.entries(PRIO).map(([k,v])=>[k,v[0]])],['estado','Estado','select',0,Object.entries(PE_EST).map(([k,v])=>[k,v[0]])],['notas','Notas','textarea',0,null,1]]},
-  minutas:{t:'Minuta',f:[['obraId','Obra','obra',1,null,1],['titulo','Asunto de la reunión','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['lugar','Lugar','text'],['asistentes','Asistentes','textarea',0,null,1],['temas','Temas tratados','textarea',0,null,1]]},
+  minutas:{t:'Minuta',f:[['obraId','Obra','obra',1,null,1],['titulo','Asunto de la reunión','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['lugar','Lugar','text'],['asistentes','Asistentes','asist',0,null,1],['temas','Temas tratados','textarea',0,null,1]]},
   bitacora:{t:'Nota de bitácora',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha y hora','datetime-local',1],['tipo','Tipo de nota','select',0,BIT_T],['texto','Descripción','textarea',1,null,1],['fotos','Fotos','photos',0,null,1]]},
   evidencias:{t:'Evidencia',f:[['obraId','Obra','obra',1,null,1],['concepto','Concepto o frente de trabajo','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['gps','Ubicación GPS','gps'],['fotos','Fotos','photos',1,null,1],['nota','Nota','textarea',0,null,1]]},
   documentos:{t:'Documento',f:[['obraId','Obra','obra',1,null,1],['tipo','Tipo','select',0,DOC_T],['fecha','Fecha','date'],['nombre','Nombre','text',1,null,1],['file','Archivo (PDF, imagen, Excel, Word)','file',0,null,1],['notas','Notas','textarea',0,null,1]]},
 };
 let photoBuf=[],fileBuf=null;
+const asList=m=>Array.isArray(m.asistentes)?m.asistentes:String(m.asistentes||'').split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean).map(nombre=>({nombre,cargo:'',empresa:''}));
+const asRow=a=>`<div class="as-row"><input data-k="nombre" placeholder="Nombre" aria-label="Nombre" value="${esc(a.nombre)}"><input data-k="cargo" placeholder="Cargo" aria-label="Cargo" value="${esc(a.cargo)}"><input data-k="empresa" placeholder="Empresa o área" aria-label="Empresa o área" value="${esc(a.empresa)}"><button type="button" class="x" data-asdel="1" aria-label="Quitar asistente">${ic('trash')}</button></div>`;
 function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...obj};photoBuf=[...(o.fotos||[])];fileBuf=null;
   const fld=([k,l,t,req,opts,full,hint])=>{const v=o[k]??'';const id='f-'+k;const lab=`<label for="${id}">${l}${req?' *':''}</label>`;let inp;
     if(t==='select')inp=`<select id="${id}" name="${k}">${opts.map(x=>{const[a,b]=Array.isArray(x)?x:[x,x];return `<option value="${esc(a)}" ${String(v)===String(a)?'selected':''}>${esc(b)}</option>`}).join('')}</select>`;
@@ -876,6 +915,7 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
     else if(t==='money')inp=`<input id="${id}" name="${k}" inputmode="decimal" value="${v===''?'':esc(v)}" placeholder="0.00">`;
     else if(t==='number')inp=`<input id="${id}" name="${k}" type="number" step="any" value="${esc(v)}">`;
     else if(t==='photos')inp=`<input id="${id}" type="file" accept="image/*" capture="environment" multiple data-photos="1"><div class="pv" id="pv">${photoBuf.map((p,i)=>`<img src="${p}" alt="Foto ${i+1}">`).join('')}</div><span class="hint">Puedes tomar la foto con la cámara o elegirla de la galería.</span>`;
+    else if(t==='asist')inp=`<div id="asList" class="as-list">${(asList(o).length?asList(o):[{nombre:'',cargo:'',empresa:''}]).map(asRow).join('')}</div><button type="button" class="btn sm" data-asadd="1" style="align-self:flex-start">${ic('plus')}Agregar asistente</button>`;
     else if(t==='file')inp=`<input id="${id}" type="file" data-file="1"><span class="hint" id="fileH">${o.archivo?'Actual: '+esc(o.archivo)+'. Elige otro para reemplazarlo.':'Se guarda en este dispositivo y, si está activa la sincronización, en la nube.'}</span>`;
     else if(t==='gps')inp=`<div class="row" style="flex-wrap:nowrap"><input id="${id}" name="${k}" value="${esc(v)}" placeholder="lat, long" style="flex:1"><button type="button" class="btn sm" data-gps="${id}">${ic('pin')}GPS</button></div><span class="hint" id="${id}-h"></span>`;
     else inp=`<input id="${id}" name="${k}" type="${t}" value="${esc(v)}">`;
@@ -883,7 +923,7 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><form class="modal" id="frm" novalidate><div class="mh"><h2>${title||(o.id?'Editar ':'Nueva ')+F.t.toLowerCase()}</h2><button type="button" class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${F.f.map(fld).join('')}${extra}<div class="fld full"><span class="note" id="frmErr" style="color:var(--bad)"></span></div></div><div class="mf">${o.id?`<button type="button" class="btn danger" id="frmDel" style="margin-right:auto">${ic('trash')}Eliminar</button>`:''}<button type="button" class="btn" data-close="1">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
   const form=$('#frm');
   form.onsubmit=e=>{e.preventDefault();const out={...o};let miss=[];
-    F.f.forEach(([k,l,t,req])=>{if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
+    F.f.forEach(([k,l,t,req])=>{if(t==='asist'){out.asistentes=[...form.querySelectorAll('.as-row')].map(r=>({nombre:r.querySelector('[data-k=nombre]').value.trim(),cargo:r.querySelector('[data-k=cargo]').value.trim(),empresa:r.querySelector('[data-k=empresa]').value.trim()})).filter(a=>a.nombre);return}if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
     if(form.elements.acuerdos){out._acuerdos=form.elements.acuerdos.value;out._resp=form.elements.acResp.value;out._fecha=form.elements.acFecha.value}
     if(miss.length){$('#frmErr').textContent='Falta: '+miss.join(', ');return}
     if(fileBuf){out.archivo=fileBuf.name;out.mime=fileBuf.type;out.size=fileBuf.size;out.ruta='';out._blob=fileBuf}
@@ -901,7 +941,7 @@ function needObra(){if(!D.obras.length){toast('Primero registra una obra');ACT.n
 function saver(col,msg,after){return o=>{if(o===null){del(col,lastEdit);render();toast('Eliminado');return}
   if(!o.id)o.id=uid();
   if(col==='documentos'&&o._blob){fileSet(o.id,o._blob);delete o._blob}
-  if(col==='bitacora'){if(!o.estado)o.estado=isExt()?'cargada':'aprobada';if(o.estado==='aprobada'&&!o.folio)o.folio=nextFolio(o.obraId)}
+  if(col==='bitacora'){if(!o.estado)o.estado=isAdmin()?'aprobada':'cargada';if(o.estado==='aprobada'&&!o.folio)o.folio=nextFolio(o.obraId)}
   const ac=o._acuerdos,rp=o._resp,fe=o._fecha;delete o._acuerdos;delete o._resp;delete o._fecha;
   put(col,o);
   if(col==='minutas'&&ac){ac.split('\n').map(s=>s.trim()).filter(Boolean).forEach(t=>put('pendientes',{id:uid(),obraId:o.obraId,minutaId:o.id,origen:'acuerdo',titulo:t.replace(/^[-•*\d.)\s]+/,''),responsable:rp,compromiso:fe,prioridad:'media',estado:'pendiente',notas:''}))}
@@ -928,6 +968,10 @@ const ACT={
   logout:()=>{if(S.sync.on)Sync.logout();else{U=null;render()}},
   pickUser:()=>{$('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:480px"><div class="mh"><h2>Entrar como</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr">${S.usuarios.map(u=>`<button class="btn" style="justify-content:flex-start;text-align:left;white-space:normal" data-as="${u.id}"><span class="avatar" style="width:30px;height:30px;font-size:12px">${initials(u.nombre)}</span><span><b>${esc(u.nombre)}</b><br><span class="note">${esc(ROLES[u.rol])}${u.obraId?' · '+esc(obraCorto(u.obraId)):''}</span></span></button>`).join('')}</div></div></div>`},
   newUser:()=>userForm(null),
+  logoDel:()=>{const F={...fmtImp(),id:'formato'};F.logo='';put('ajustes',F);logoBuf=null;render();toast('Logo quitado')},
+  printMin:()=>{const b=document.querySelector('[data-act="printMin"]');const m=b&&byId('minutas',b.dataset.min);if(m)previewMinuta(m)},
+  doPrint:()=>{const b=document.querySelector('[data-act="doPrint"]');const m=b&&byId('minutas',b.dataset.min);if(m)printMinuta(m)},
+  pdfMin:()=>{const b=document.querySelector('[data-act="pdfMin"]');const m=b&&byId('minutas',b.dataset.min);if(m)pdfMinuta(m)},
   copySql:()=>{try{navigator.clipboard.writeText(SQL).then(()=>toast('Código copiado'),()=>selectSql())}catch(e){selectSql()}},
 };
 function selectSql(){const r=document.createRange();r.selectNodeContents($('#sqlBox'));const s=getSelection();s.removeAllRanges();s.addRange(r);toast('Código seleccionado; cópialo con Ctrl+C')}
@@ -962,8 +1006,33 @@ async function saveUserForm(f){const cl=S.sync.on&&S.sync.url;const nombre=f.nom
     Sync.perfiles=[...Sync.perfiles.filter(z=>z.email!==email),{email,nombre,rol,obra_id:obraId||null}]}
   else{const id=f.dataset.id;if(id){Object.assign(S.usuarios.find(z=>z.id===id),{nombre,rol,obraId});if(U&&U.id===id)U=S.usuarios.find(z=>z.id===id)}else S.usuarios.push({id:uid(),nombre,rol,obraId,email:''});saveUsers()}
   closeModal();render();toast('Usuario guardado')}
+function minutaHTML(m){const o=byId('obras',m.obraId)||{};const F=fmtImp();const ac=S.pendientes.filter(p=>p.minutaId===m.id);
+  const as=asList(m);
+  return `<div class="pm">
+  <div class="pm-h">${F.logo?`<img class="pm-img" src="${F.logo}" alt="Logo">`:`<div class="pm-logo">${LOGO.replace('<svg ','<svg width="40" height="40" color="#333" style="color:#333" ').replace(/currentColor/g,'#333')}</div>`}<div class="pm-hc">${F.empresa?`<b>${esc(F.empresa)}</b>`:''}${F.area?`<span>${esc(F.area)}</span>`:''}<div class="pm-k">Minuta de reunión</div><h1>${esc(m.titulo)}</h1></div>${F.codigo?`<div class="pm-cod">${esc(F.codigo)}</div>`:''}</div>
+  <table class="pm-t"><tr><th>Obra</th><td colspan="3">${esc(o.nombre||'')}</td></tr><tr><th>Contrato</th><td>${esc(o.numero||'')}</td><th>Aeropuerto</th><td>${esc(o.aeropuerto||'')}</td></tr>
+  <tr><th>Contratista</th><td>${esc(o.contratista||'')}</td><th>Supervisión</th><td>${esc(o.supervision||'')}</td></tr><tr><th>Fecha y hora</th><td>${fDT(m.fecha)}</td><th>Lugar</th><td>${esc(m.lugar||'')}</td></tr></table>
+  <h2>Asistentes</h2><table class="pm-t pm-as"><thead><tr><th>No.</th><th>Nombre</th><th>Cargo</th><th>Empresa o área</th><th>Firma</th></tr></thead><tbody>${(as.length?as:[{},{},{}]).map((a,i)=>`<tr><td>${i+1}</td><td>${esc(a.nombre||'')}</td><td>${esc(a.cargo||'')}</td><td>${esc(a.empresa||'')}</td><td></td></tr>`).join('')}</tbody></table>
+  <h2>Temas tratados</h2><p class="pm-p">${esc(m.temas||'—')}</p>
+  <h2>Acuerdos</h2>${ac.length?`<table class="pm-t pm-ac"><thead><tr><th>No.</th><th>Acuerdo</th><th>Responsable</th><th>Fecha compromiso</th><th>Estado</th></tr></thead><tbody>${ac.map((a,i)=>`<tr><td>${i+1}</td><td>${esc(a.titulo)}</td><td>${esc(a.responsable||'')}</td><td>${fD(a.compromiso)}</td><td>${esc((PE_EST[a.estado]||[a.estado])[0])}</td></tr>`).join('')}</tbody></table>`:'<p class="pm-p">Sin acuerdos registrados.</p>'}
+  <div class="pm-pie">Impreso el ${fDT(isoT(new Date()))} por ${esc(U?U.nombre:'')}</div></div>`}
+function printMinuta(m){$('#printArea').innerHTML=minutaHTML(m);setTimeout(()=>{try{window.print()}catch(e){}if(inClaude)toast('La vista previa no permite imprimir. Usa la app instalada o tu enlace.')},150)}
+function previewMinuta(m){
+  $('#modalRoot').innerHTML=`<div class="ov pv-ov"><div class="pv-box" role="dialog" aria-label="Vista previa de impresión"><div class="pv-bar"><b>Vista previa · hoja carta</b><span class="pv-sp"></span><button class="btn sm" data-close="1">${ic('close')}Cerrar</button><button class="btn sm" data-act="pdfMin" data-min="${m.id}">${ic('file')}Descargar PDF</button><button class="btn sm pri" data-act="doPrint" data-min="${m.id}">${ic('file')}Imprimir</button></div><div class="pv-scroll"><div class="pv-paper" id="pvPaper">${minutaHTML(m)}</div></div></div></div>`;
+  fitPaper()}
+function fitPaper(){const pp=$('#pvPaper');if(!pp)return;const w=pp.parentElement.clientWidth-24,full=816;const k=Math.min(1,w/full);pp.style.transform=k<1?`scale(${k})`:'';pp.style.marginLeft=k<1?'0':'';pp.style.marginBottom=k<1?`${-(pp.offsetHeight*(1-k))}px`:''}
+addEventListener('resize',fitPaper);
+const pdfLib=()=>window.html2pdf?Promise.resolve(window.html2pdf):new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';sc.onload=()=>window.html2pdf?ok(window.html2pdf):no();sc.onerror=no;document.head.appendChild(sc)});
+async function pdfMinuta(m){const o=byId('obras',m.obraId)||{};const name=`Minuta ${o.numero||''} ${String(m.fecha||'').slice(0,10)}`.replace(/[\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim()+'.pdf';
+  toast('Generando PDF…');
+  try{const h=await pdfLib();await h().set({margin:0,filename:name,image:{type:'jpeg',quality:.96},html2canvas:{scale:2,backgroundColor:'#fff'},jsPDF:{unit:'in',format:'letter',orientation:'portrait'},pagebreak:{mode:['css','legacy'],avoid:['tr','h2']}}).from(`<div class="pv-paper" style="margin:0;box-shadow:none;transform:none">${minutaHTML(m)}</div>`,'string').save();
+    if(inClaude)toast('La vista previa no permite descargar. Usa la app instalada o tu enlace.')}
+  catch(e){toast('Sin conexión para generar el PDF. En el cuadro de impresión elige “Guardar como PDF”.');setTimeout(()=>printMinuta(m),1200)}}
+const fmtImp=()=>S.ajustes.find(x=>x.id==='formato')||{};
+let logoBuf=null;
+function logoToData(file){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,600/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/png'))};im.onerror=()=>res(null);im.src=r.result};r.readAsDataURL(file)})}
 function showMinuta(m){const ac=D.pendientes.filter(p=>p.minutaId===m.id);
-  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:720px"><div class="mh"><h2>${esc(m.titulo)}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr"><div class="kv"><div>Obra</div><div style="white-space:normal">${esc(obraTxt(m.obraId))}</div><div>Fecha</div><div class="num">${fDT(m.fecha)}</div><div>Lugar</div><div>${esc(m.lugar||'—')}</div><div>Asistentes</div><div style="white-space:pre-wrap">${esc(m.asistentes||'—')}</div><div>Temas</div><div style="white-space:pre-wrap">${esc(m.temas||'—')}</div></div><h3 style="font-size:18px;margin-top:6px">Acuerdos</h3>${penList(ac,false)}</div><div class="mf"><button class="btn" data-addac="${m.id}">${ic('plus')}Agregar acuerdo</button><button class="btn pri" data-edit="minutas:${m.id}">${ic('edit')}Editar minuta</button></div></div></div>`}
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:720px"><div class="mh"><h2>${esc(m.titulo)}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr"><div class="kv"><div>Obra</div><div style="white-space:normal">${esc(obraTxt(m.obraId))}</div><div>Fecha</div><div class="num">${fDT(m.fecha)}</div><div>Lugar</div><div>${esc(m.lugar||'—')}</div><div>Asistentes</div><div style="white-space:normal">${asList(m).map(a=>`${esc(a.nombre)}${a.cargo||a.empresa?` <span class="note">${esc([a.cargo,a.empresa].filter(Boolean).join(' · '))}</span>`:''}`).join('<br>')||'—'}</div><div>Temas</div><div style="white-space:pre-wrap">${esc(m.temas||'—')}</div></div><h3 style="font-size:18px;margin-top:6px">Acuerdos</h3>${penList(ac,false)}</div><div class="mf"><button class="btn" data-act="printMin" data-min="${m.id}" style="margin-right:auto">${ic('file')}Vista previa e imprimir</button><button class="btn" data-addac="${m.id}">${ic('plus')}Agregar acuerdo</button><button class="btn pri" data-edit="minutas:${m.id}">${ic('edit')}Editar minuta</button></div></div></div>`}
 function showEv(x){const fs=x.fotos||[];const g=x.gps&&/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(x.gps.trim())?x.gps.replace(/\s/g,''):'';
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:780px"><div class="mh"><h2>${esc(x.concepto||'Evidencia')}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr">${fs.map(f=>`<img src="${f}" alt="" style="width:100%;border-radius:10px">`).join('')||'<div class="empty">Sin fotos</div>'}<div class="kv"><div>Obra</div><div style="white-space:normal">${esc(obraTxt(x.obraId))}</div><div>Fecha</div><div class="num">${fDT(x.fecha)}</div><div>Ubicación</div><div>${g?`<a href="https://www.google.com/maps?q=${g}" target="_blank" rel="noopener">${esc(x.gps)}</a>`:esc(x.gps||'—')}</div><div>Subió</div><div>${esc(x.por||'—')}</div>${x.nota?`<div>Nota</div><div style="white-space:pre-wrap">${esc(x.nota)}</div>`:''}</div></div><div class="mf"><button class="btn pri" data-edit="evidencias:${x.id}">${ic('edit')}Editar</button></div></div></div>`}
 async function showDoc(d){const k=docKind(d);let url=null,blob=await fileGet(d.id);
@@ -978,6 +1047,8 @@ function getGPS(id){const h=$('#'+id+'-h');try{if(!navigator.geolocation)throw 0
 document.addEventListener('click',e=>{const t=e.target;
   if(t.closest('[data-close]')&&(t===t.closest('[data-close]')||t.closest('button[data-close]'))){if(t.classList.contains('ov')||t.closest('button[data-close]')){closeModal();return}}
   const g=t.closest('[data-go]');if(g){closeModal();const k=g.dataset.go;if(k==='mas'){moreSheet();return}V.q='';$('#q').value='';go(k);return}
+  if(t.closest('[data-asadd]')){$('#asList').insertAdjacentHTML('beforeend',asRow({nombre:'',cargo:'',empresa:''}));const r=$('#asList').lastElementChild;r.querySelector('input').focus();return}
+  if(t.closest('[data-asdel]')){const r=t.closest('.as-row');if(r)r.remove();return}
   const as=t.closest('[data-as]');if(as){S.config.uid=as.dataset.as;persist('config');U=S.usuarios.find(z=>z.id===S.config.uid)||null;closeModal();V.obra='';go(isExt()?'bitacora':'panel');toast('Ahora ves la app como '+(U?ROLES[U.rol]:''));return}
   const us=t.closest('[data-user]');if(us){userForm(us.dataset.user);return}
   const rv=t.closest('[data-rev]');if(rv){const[a,id]=rv.dataset.rev.split(':');revisar(a,id);return}
@@ -999,12 +1070,14 @@ document.addEventListener('click',e=>{const t=e.target;
 });
 document.addEventListener('change',async ev=>{const t=ev.target;
   if(t.id==='obraFil'){V.obra=t.value;render();return}
+  if(t.dataset.logoup&&t.files[0]){logoBuf=await logoToData(t.files[0]);if(logoBuf)$('#logoPv').innerHTML=`<img src="${logoBuf}" alt="Logo nuevo" style="max-height:56px;max-width:180px;background:#fff;padding:4px;border-radius:6px"><span class="note" style="margin-left:8px">Guarda para aplicarlo</span>`;return}
   if(t.dataset.photos){for(const f of t.files){const p=await compress(f);if(p)photoBuf.push(p)}$('#pv').innerHTML=photoBuf.map(p=>`<img src="${p}" alt="">`).join('');t.value='';return}
   if(t.dataset.file){fileBuf=t.files[0]||null;if(fileBuf){$('#fileH').textContent=fileBuf.name+' · '+(fileBuf.size/1048576).toFixed(1)+' MB';const n=$('#f-nombre');if(n&&!n.value)n.value=fileBuf.name.replace(/\.[^.]+$/,'')}return}
   if(t.id==='importFile'&&t.files[0]){try{const d=JSON.parse(await t.files[0].text());if(d.app!=='control-obras')throw 0;COLS.forEach(c=>{S[c]=Array.isArray(d[c])?d[c]:[];persist(c);S[c].forEach(x=>queue(c,x.id))});if(d.config){S.config={...S.config,...d.config};persist('config')}go('panel');toast('Respaldo cargado')}catch(e){toast('Ese archivo no es un respaldo de esta app')}t.value=''}
 });
 document.addEventListener('submit',async ev=>{const f=ev.target;
   if(f.id==='userForm'){ev.preventDefault();saveUserForm(f)}
+  if(f.id==='fmtForm'){ev.preventDefault();if(!isAdmin())return;const F={...fmtImp(),id:'formato',empresa:f.empresa.value.trim(),area:f.area.value.trim(),codigo:f.codigo.value.trim()};if(logoBuf)F.logo=logoBuf;put('ajustes',F);logoBuf=null;render();toast('Formato guardado')}
   if(f.id==='loginForm'){ev.preventDefault();const er=$('#lgErr');er.textContent='Entrando…';const m=await Sync.login(f.email.value.trim(),f.pw.value);if(m)er.textContent='No se pudo entrar: '+m;else if(!U)er.textContent=Sync.msg||'Tu usuario no tiene un rol asignado.';else go(isExt()?'bitacora':'panel')}
   if(f.id==='syncForm'){ev.preventDefault();const url=f.url.value.trim().replace(/\/+$/,''),key=f.key.value.trim(),email=f.email.value.trim(),pw=f.pw.value;const er=$('#syncErr');
     if(!/^https:\/\/.+/.test(url)||!key){er.textContent='Escribe la URL (empieza con https://) y la clave pública de tu proyecto.';return}
