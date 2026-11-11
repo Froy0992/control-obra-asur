@@ -443,7 +443,7 @@ const isExt=()=>!!U&&(U.rol==='contratista'||U.rol==='supervision');
 function visible(col,x){if(isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isExt())return col==='obras'||col==='bitacora';return true}
 const D=new Proxy({},{get:(_,col)=>(S[col]||[]).filter(x=>visible(col,x))});
 function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())return col==='bitacora';return col!=='obras'&&col!=='historial'}
-function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(isExt())return col==='bitacora'&&x.estado==='cargada'&&x.porId===U.id;if(col==='bitacora')return x.estado!=='aprobada'||x.porId===U.id;return col!=='historial'}
+function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return false;return col!=='historial'}
 const COL_L={obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
 const refTxt=(col,o)=>col==='estimaciones'?'Estimación '+o.numero:col==='avances'?'Corte del '+fD(o.fecha):col==='bitacora'?(o.folio?'Nota '+o.folio:'Nota sin folio')+' · '+(o.tipo||''):col==='convenios'?'Convenio '+(o.numero||''):String(o.titulo||o.nombre||o.concepto||o.numero||'');
 const SKIP=['upd','por','porId','ruta','mime','size','ejemplo','aprobadoPor','fechaAprob'];
@@ -573,17 +573,17 @@ create policy "leer" on registros for select to authenticated using (
   or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col in ('obras','bitacora')));
 create policy "crear" on registros for insert to authenticated with check (
   es_admin()
-  or (mi_rol() = 'coordObra' and obra_id = mi_obra())
+  or (mi_rol() = 'coordObra' and obra_id = mi_obra() and (col <> 'bitacora' or data->>'estado' = 'cargada'))
   or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra()
       and (col = 'historial' or (col = 'bitacora' and data->>'estado' = 'cargada'))));
 create policy "editar" on registros for update to authenticated
   using (
     es_admin()
-    or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial')
+    or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial' and (col <> 'bitacora' or data->>'estado' = 'cargada'))
     or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada'))
   with check (
     es_admin()
-    or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial')
+    or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial' and (col <> 'bitacora' or data->>'estado' = 'cargada'))
     or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada'));
 
 -- Tu propio usuario como coordinador (cambia el correo y el nombre):
@@ -775,7 +775,7 @@ pendientes(){const it=D.pendientes.filter(p=>(!V.obra||p.obraId===V.obra)&&(V.f=
 
 minutas(){const it=ofObra('minutas',V.obra);return `${phead('Minutas','Reuniones de obra y los acuerdos que generan',obraSel()+`<button class="btn pri hide-m" data-act="newMin">${ic('plus')}Nueva minuta</button>`)}<div class="card"><div class="card-b" style="padding-top:8px">${minList(it,!V.obra)}</div></div>`},
 
-bitacora(){const it=ofObra('bitacora',V.obra).filter(b=>!V.f||(V.f==='pend'?['cargada','revision'].includes(b.estado):(b.estado||'aprobada')===V.f));return `${phead('Bitácora',isExt()?'Las notas que subas quedan como cargadas hasta que el coordinador las apruebe':'El folio se asigna al aprobar la nota',obraSel()+`<button class="btn pri hide-m" data-act="newBit">${ic('plus')}Nueva nota</button>`)}${chips([['','Todas'],['pend','Por aprobar'],['aprobada','Aprobadas'],['rechazada','Rechazadas']])}<div class="card"><div class="card-b" style="padding-top:8px">${bitList(it,!V.obra)}</div></div>`},
+bitacora(){const it=ofObra('bitacora',V.obra).filter(b=>!V.f||(V.f==='pend'?['cargada','revision'].includes(b.estado):(b.estado||'aprobada')===V.f));return `${phead('Bitácora',isAdmin()?'El folio se asigna al aprobar la nota':'Tus notas quedan como cargadas hasta que el coordinador de infraestructura las apruebe',obraSel()+`<button class="btn pri hide-m" data-act="newBit">${ic('plus')}Nueva nota</button>`)}${chips([['','Todas'],['pend','Por aprobar'],['aprobada','Aprobadas'],['rechazada','Rechazadas']])}<div class="card"><div class="card-b" style="padding-top:8px">${bitList(it,!V.obra)}</div></div>`},
 
 historial(){const it=ofObra('historial',V.obra);return `${phead('Historial de movimientos','Quién creó, modificó, aprobó o eliminó información en cada contrato',obraSel())}<div class="card"><div class="card-b" style="padding-top:8px">${histList(it,!V.obra)}</div></div>`},
 
@@ -808,7 +808,7 @@ config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfi
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Respaldo y datos</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px"><div class="row"><button class="btn" data-act="export">Descargar respaldo</button><button class="btn" data-act="import">Cargar respaldo</button></div><p class="note" style="margin:0">El respaldo incluye registros y fotos. Los archivos de Documentos se guardan aparte en este dispositivo o en la nube.</p><div class="row">${S.config.ejemplos?`<button class="btn danger" data-act="clearDemo">Borrar obras de ejemplo</button>`:`<button class="btn" data-act="reseed">Cargar obras de ejemplo</button>`}</div></div></div>`:''}
   </div>
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Usuarios y permisos</h2><button class="btn sm" data-act="newUser">${ic('plus')}Agregar usuario</button></div><div class="card-b">
-    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión solo suben notas de bitácora de su contrato.</p>
+    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión solo suben notas de bitácora de su contrato. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo.</p>
     <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Contrato</th>${cl?'<th>Correo</th>':''}<th></th></tr></thead><tbody>${users.map(u=>`<tr class="click" data-user="${esc(u.id)}"><td><b>${esc(u.nombre)}</b></td><td>${esc(ROLES[u.rol]||u.rol)}</td><td>${u.obraId?esc(obraCorto(u.obraId)):'Todos'}</td>${cl?`<td>${esc(u.email)}</td>`:''}<td class="r">${ic('edit','width="16" height="16"')}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}
   ${isAdmin()||!cl?`<div class="card"><div class="card-h"><h2>Sincronización en tiempo real</h2>${stPill()}</div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
     <p style="margin:0;max-width:70ch">Conecta la app a un proyecto gratuito de Supabase para que todo tu equipo vea los mismos avances, estimaciones, pendientes y evidencias al momento. Sin señal se sigue capturando y se sube solo al regresar la conexión.</p>
@@ -901,7 +901,7 @@ function needObra(){if(!D.obras.length){toast('Primero registra una obra');ACT.n
 function saver(col,msg,after){return o=>{if(o===null){del(col,lastEdit);render();toast('Eliminado');return}
   if(!o.id)o.id=uid();
   if(col==='documentos'&&o._blob){fileSet(o.id,o._blob);delete o._blob}
-  if(col==='bitacora'){if(!o.estado)o.estado=isExt()?'cargada':'aprobada';if(o.estado==='aprobada'&&!o.folio)o.folio=nextFolio(o.obraId)}
+  if(col==='bitacora'){if(!o.estado)o.estado=isAdmin()?'aprobada':'cargada';if(o.estado==='aprobada'&&!o.folio)o.folio=nextFolio(o.obraId)}
   const ac=o._acuerdos,rp=o._resp,fe=o._fecha;delete o._acuerdos;delete o._resp;delete o._fecha;
   put(col,o);
   if(col==='minutas'&&ac){ac.split('\n').map(s=>s.trim()).filter(Boolean).forEach(t=>put('pendientes',{id:uid(),obraId:o.obraId,minutaId:o.id,origen:'acuerdo',titulo:t.replace(/^[-•*\d.)\s]+/,''),responsable:rp,compromiso:fe,prioridad:'media',estado:'pendiente',notas:''}))}
