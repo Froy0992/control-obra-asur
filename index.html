@@ -482,7 +482,13 @@ function fmtF(col,k,v){if(v==null||v==='')return '—';if(k==='asistentes')retur
 function fmtV(v){if(v==null||v==='')return '—';if(Array.isArray(v))return v.length+' foto(s)';const t=String(v);return t.length>90?t.slice(0,90)+'…':t}
 function logH(col,o,accion,cambios){if(col==='historial')return;const oid=col==='obras'?o.id:o.obraId;if(!oid)return;const now=new Date().toISOString();const h={id:uid(),obraId:oid,fecha:now,upd:now,usuario:U?U.nombre:'—',rol:U?U.rol:'',accion,tipo:COL_L[col]||col,ref:refTxt(col,o),cambios:cambios||[]};h.por=h.usuario;S.historial.unshift(h);persist('historial');queue('historial',h.id)}
 const saveUsers=()=>idbSet('usuarios',S.usuarios);
-function seedUsers(){S.usuarios=[{id:'u1',nombre:'Gerente de infraestructura',rol:'gerente',obraId:'',email:''},{id:'u2',nombre:'Froylan',rol:'coordinador',obraId:'',email:''},{id:'u3',nombre:'Ing. Ricardo Pech',rol:'coordObra',obraId:'o1',email:''},{id:'u4',nombre:'Pavimentos del Sureste',rol:'contratista',obraId:'o1',email:''},{id:'u5',nombre:'Supervisión Técnica Peninsular',rol:'supervision',obraId:'o1',email:''},{id:'u6',nombre:'Arq. Mariana Canché',rol:'coordObra',obraId:'o2',email:''}];saveUsers()}
+const PW_TEMP='Obra2026';
+const b64=a=>btoa(String.fromCharCode(...new Uint8Array(a)));
+async function hashPw(pw,salt){salt=salt||b64(crypto.getRandomValues(new Uint8Array(16)));const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new TextEncoder().encode(salt),iterations:120000,hash:'SHA-256'},k,256);return {salt,hash:b64(bits)}}
+async function checkPw(u,pw){if(!u||!u.pw)return false;const h=await hashPw(pw,u.pw.salt);return h.hash===u.pw.hash}
+const slug=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/^(ing|arq|lic|c)\.\s*/,'').replace(/[^a-z0-9]+/g,'.').replace(/^\.|\.$/g,'').slice(0,24)||'usuario';
+async function ensureCreds(){let ch=false;for(const u of S.usuarios){if(!u.usuario){const SEEDU={u1:'gerente',u2:'froylan',u3:'rpech',u4:'contratista',u5:'supervision',u6:'mcanche'};let b=SEEDU[u.id]||slug(u.nombre),n=b,i=2;while(S.usuarios.some(z=>z!==u&&z.usuario===n))n=b+i++;u.usuario=n;ch=true}if(!u.pw){u.pw=await hashPw(PW_TEMP);u.cambiar=true;ch=true}}if(ch)saveUsers()}
+function seedUsers(){S.usuarios=[{id:'u1',nombre:'Gerente de infraestructura',usuario:'gerente',rol:'gerente',obraId:'',email:''},{id:'u2',nombre:'Froylan',usuario:'froylan',rol:'coordinador',obraId:'',email:''},{id:'u3',nombre:'Ing. Ricardo Pech',usuario:'rpech',rol:'coordObra',obraId:'o1',email:''},{id:'u4',nombre:'Pavimentos del Sureste',usuario:'contratista',rol:'contratista',obraId:'o1',email:''},{id:'u5',nombre:'Supervisión Técnica Peninsular',usuario:'supervision',rol:'supervision',obraId:'o1',email:''},{id:'u6',nombre:'Arq. Mariana Canché',usuario:'mcanche',rol:'coordObra',obraId:'o2',email:''}];saveUsers()}
 const byId=(col,id)=>S[col].find(x=>x.id===id);
 const ofObra=(col,id)=>id?D[col].filter(x=>x.obraId===id):D[col];
 
@@ -681,7 +687,7 @@ function navHtml(){const N=navFor(),B=bnavFor();const pa=isAdmin()?porAprobar().
 const FAB={obras:'newObra',estimaciones:'newEst',pendientes:'newPen',minutas:'newMin',bitacora:'newBit',evidencias:'newEv',documentos:'newDoc'};
 const FAB_COL={newObra:'obras',newEst:'estimaciones',newPen:'pendientes',newMin:'minutas',newBit:'bitacora',newEv:'evidencias',newDoc:'documentos',newAv:'avances'};
 function render(){const N=navFor();if(V.view!=='buscar'&&!N.some(n=>n[0]===V.view)){V.view=N[0][0];V.id=null}
-  document.body.classList.toggle('locked',!U);navHtml();const f=!U?VIEWS.login:(VIEWS[V.view]||VIEWS.panel);$('#view').innerHTML=f();
+  document.body.classList.toggle('locked',!U||!!(U.cambiar&&!(S.sync.on&&S.sync.url)));navHtml();const f=!U?VIEWS.login:(U.cambiar&&!(S.sync.on&&S.sync.url))?VIEWS.cambiaPw:(VIEWS[V.view]||VIEWS.panel);$('#view').innerHTML=f();
   const fm=V.view==='obras'&&V.id?'newEv':FAB[V.view];$('#fab').hidden=!U||!fm||(V.view==='obras'&&!V.id&&!isAdmin())||!canCreate(FAB_COL[fm]);bindCharts()}
 
 /* ---------- Piezas de interfaz ---------- */
@@ -812,11 +818,17 @@ bitacora(){const it=ofObra('bitacora',V.obra).filter(b=>!V.f||(V.f==='pend'?['ca
 
 historial(){const it=ofObra('historial',V.obra);return `${phead('Historial de movimientos','Quién creó, modificó, aprobó o eliminó información en cada contrato',obraSel())}<div class="card"><div class="card-b" style="padding-top:8px">${histList(it,!V.obra)}</div></div>`},
 
+cambiaPw(){return `<div style="max-width:440px;margin:6vh auto 0;width:100%"><div class="card"><div class="card-h"><h2>${U&&U._vol?'Cambia tu contraseña':'Crea tu contraseña'}</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
+  <p class="note" style="margin:0">${U&&U._vol?'Escribe tu nueva contraseña.':`Hola ${esc(U?U.nombre:'')}. Entraste con una contraseña temporal; escribe una nueva que solo tú conozcas.`}</p>
+  <form id="pwForm" style="display:flex;flex-direction:column;gap:10px"><div class="fld"><label for="pw1">Nueva contraseña</label><input id="pw1" name="pw1" type="password" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres.</span></div><div class="fld"><label for="pw2">Repítela</label><input id="pw2" name="pw2" type="password" autocomplete="new-password"></div><span class="note" id="pwErr" style="color:var(--bad)"></span><button class="btn pri">Guardar y entrar</button></form>
+  ${U&&U._vol?`<button class="link" data-act="pwCancel">Cancelar</button>`:`<button class="link" data-act="logout">Salir</button>`}</div></div></div>`},
 login(){const on=S.sync.on&&S.sync.url;return `<div style="max-width:440px;margin:6vh auto 0;width:100%"><div class="card"><div class="card-h"><h2>Inicia sesión</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
   ${on?`<p class="note" style="margin:0">Entra con el correo y la contraseña que te dio el coordinador de infraestructura.</p>
   <div class="banner" ${Sync.msg?'':'hidden'}><span id="syncMsg">${esc(Sync.msg)}</span></div>
   <form id="loginForm" style="display:flex;flex-direction:column;gap:10px"><div class="fld"><label for="lgMail">Correo</label><input id="lgMail" name="email" type="email" autocomplete="username" value="${esc(S.sync.email||'')}"></div><div class="fld"><label for="lgPw">Contraseña</label><input id="lgPw" name="pw" type="password" autocomplete="current-password"></div><span class="note" id="lgErr" style="color:var(--bad)"></span><button class="btn pri">Entrar</button></form>
-  <button class="link" data-act="syncOff">Usar sin conexión al servidor</button>`:`<p style="margin:0">No hay un usuario activo en este dispositivo.</p><button class="btn pri" data-act="pickUser">Elegir usuario</button>`}
+  <button class="link" data-act="syncOff">Usar sin conexión al servidor</button>`:`<p class="note" style="margin:0">Entra con el usuario y la contraseña que te dio el gerente o el coordinador de infraestructura.</p>
+  <form id="locLogin" style="display:flex;flex-direction:column;gap:10px"><div class="fld"><label for="lgUser">Usuario</label><input id="lgUser" name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(S.config.lastUser||'')}"></div><div class="fld"><label for="lgPw2">Contraseña</label><input id="lgPw2" name="pw" type="password" autocomplete="current-password"></div><span class="note" id="lgErr" style="color:var(--bad)"></span><button class="btn pri">Entrar</button></form>
+  <p class="note" style="margin:0">¿Olvidaste tu contraseña? Pide al gerente o al coordinador de infraestructura que te asigne una nueva.</p>`}
   </div></div></div>`},
 
 evidencias(){const it=ofObra('evidencias',V.obra);return `${phead('Evidencias','Fotos de obra con fecha y ubicación GPS',obraSel()+`<button class="btn pri hide-m" data-act="newEv">${ic('camera')}Subir evidencia</button>`)}${evGrid(it,!V.obra)}`},
@@ -836,8 +848,8 @@ buscar(){const q=V.q.trim().toLowerCase();const m=x=>JSON.stringify(x).toLowerCa
 config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfiles.map(x=>({id:x.email,email:x.email,nombre:x.nombre,rol:x.rol,obraId:x.obra_id||''})):S.usuarios;
   return `${phead('Ajustes','Tu cuenta, usuarios, sincronización y respaldos')}
   <div class="g2">
-  <div class="card"><div class="card-h"><h2>Tu cuenta</h2></div><div class="card-b"><div class="kv"><div>Nombre</div><div>${esc(U?U.nombre:'—')}</div><div>Rol</div><div>${esc(U?ROLES[U.rol]:'—')}</div><div>Contrato</div><div style="white-space:normal">${U&&U.obraId?esc(obraCorto(U.obraId)):'Todos los contratos'}</div></div>
-    ${!cl?`<p class="note">Sin servidor conectado, los usuarios viven solo en este dispositivo. Úsalo para probar cómo ve la app cada rol.</p><button class="btn" data-act="pickUser">Cambiar de usuario (prueba)</button>`:`<div class="row" style="margin-top:12px"><button class="btn" data-act="logout">Cerrar sesión</button></div>`}</div></div>
+  <div class="card"><div class="card-h"><h2>Tu cuenta</h2></div><div class="card-b"><div class="kv"><div>Nombre</div><div>${esc(U?U.nombre:'—')}</div><div>Usuario</div><div class="num">${esc(U?(U.usuario||U.email||''):'—')}</div><div>Rol</div><div>${esc(U?ROLES[U.rol]:'—')}</div><div>Contrato</div><div style="white-space:normal">${U&&U.obraId?esc(obraCorto(U.obraId)):'Todos los contratos'}</div></div>
+    ${!cl?`<div class="row" style="margin-top:12px"><button class="btn" data-act="myPw">Cambiar mi contraseña</button><button class="btn" data-act="logout">Cerrar sesión</button></div>`:`<div class="row" style="margin-top:12px"><button class="btn" data-act="logout">Cerrar sesión</button></div>`}</div></div>
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Respaldo y datos</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px"><div class="row"><button class="btn" data-act="export">Descargar respaldo</button><button class="btn" data-act="import">Cargar respaldo</button></div><p class="note" style="margin:0">El respaldo incluye registros y fotos. Los archivos de Documentos se guardan aparte en este dispositivo o en la nube.</p><div class="row">${S.config.ejemplos?`<button class="btn danger" data-act="clearDemo">Borrar obras de ejemplo</button>`:`<button class="btn" data-act="reseed">Cargar obras de ejemplo</button>`}</div></div></div>`:''}
   </div>
   ${isAdmin()?(()=>{const F=fmtImp();return `<div class="card"><div class="card-h"><h2>Formato de impresión</h2></div><div class="card-b"><form id="fmtForm" class="modal" style="box-shadow:none;max-width:none;border:0"><div class="mb" style="padding:0">
@@ -847,8 +859,8 @@ config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfi
     <div class="fld"><label for="fmtCod">Código del formato (opcional)</label><input id="fmtCod" name="codigo" value="${esc(F.codigo||'')}"></div>
   </div><div class="mf" style="padding:12px 0 0;border:0">${F.logo?`<button type="button" class="btn" data-act="logoDel">Quitar logo</button>`:''}<button class="btn pri">Guardar formato</button></div></form></div></div>`})():''}
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Usuarios y permisos</h2><button class="btn sm" data-act="newUser">${ic('plus')}Agregar usuario</button></div><div class="card-b">
-    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión solo suben notas de bitácora de su contrato. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo.</p>
-    <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Contrato</th>${cl?'<th>Correo</th>':''}<th></th></tr></thead><tbody>${users.map(u=>`<tr class="click" data-user="${esc(u.id)}"><td><b>${esc(u.nombre)}</b></td><td>${esc(ROLES[u.rol]||u.rol)}</td><td>${u.obraId?esc(obraCorto(u.obraId)):'Todos'}</td>${cl?`<td>${esc(u.email)}</td>`:''}<td class="r">${ic('edit','width="16" height="16"')}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}
+    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión solo suben notas de bitácora de su contrato. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo. Solo ustedes dos pueden crear usuarios, asignar contraseñas y cambiar permisos.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Contrato</th><th>${cl?'Correo':'Usuario'}</th><th></th></tr></thead><tbody>${users.map(u=>`<tr class="click" data-user="${esc(u.id)}"><td><b>${esc(u.nombre)}</b></td><td>${esc(ROLES[u.rol]||u.rol)}</td><td>${u.obraId?esc(obraCorto(u.obraId)):'Todos'}</td><td class="num">${esc(cl?u.email:(u.usuario||''))}</td><td class="r">${ic('edit','width="16" height="16"')}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}
   ${isAdmin()||!cl?`<div class="card"><div class="card-h"><h2>Sincronización en tiempo real</h2>${stPill()}</div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
     <p style="margin:0;max-width:70ch">Conecta la app a un proyecto gratuito de Supabase para que todo tu equipo vea los mismos avances, estimaciones, pendientes y evidencias al momento. Sin señal se sigue capturando y se sube solo al regresar la conexión.</p>
     ${inClaude?`<div class="banner"><span>Esta vista previa no puede conectarse a internet. La sincronización funciona en la versión instalada de la app.</span></div>`:''}
@@ -970,9 +982,10 @@ const ACT={
   import:()=>$('#importFile').click(),
   clearDemo:()=>confirmDo('Se borrarán todas las obras de ejemplo y sus registros. ¿Continuar?',()=>{D.obras.filter(o=>o.ejemplo).forEach(o=>delObra(o.id));S.config.ejemplos=false;persist('config');go('panel');toast('Listo, ya puedes registrar tus obras')}),
   reseed:()=>confirmDo('Se agregarán 4 obras de ejemplo y se reemplazará lo que tengas en este dispositivo. ¿Continuar?',()=>{seed();go('panel')}),
-  syncOff:()=>{S.sync.on=false;persist('sync');Sync.logout().then(()=>{Sync.set('off');U=S.usuarios.find(z=>z.id===S.config.uid)||S.usuarios[0]||null;render()});toast('Sincronización apagada')},
-  logout:()=>{if(S.sync.on)Sync.logout();else{U=null;render()}},
-  pickUser:()=>{$('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:480px"><div class="mh"><h2>Entrar como</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr">${S.usuarios.map(u=>`<button class="btn" style="justify-content:flex-start;text-align:left;white-space:normal" data-as="${u.id}"><span class="avatar" style="width:30px;height:30px;font-size:12px">${initials(u.nombre)}</span><span><b>${esc(u.nombre)}</b><br><span class="note">${esc(ROLES[u.rol])}${u.obraId?' · '+esc(obraCorto(u.obraId)):''}</span></span></button>`).join('')}</div></div></div>`},
+  syncOff:()=>{S.sync.on=false;persist('sync');Sync.logout().then(()=>{Sync.set('off');U=S.config.ses&&S.usuarios.find(z=>z.id===S.config.ses)||null;render()});toast('Sincronización apagada')},
+  logout:()=>{if(S.sync.on&&S.sync.url)Sync.logout();else{U=null;S.config.ses='';persist('config');closeModal();V.view='panel';render()}},
+  myPw:()=>{if(U)U={...U,cambiar:true,_vol:1};render()},
+  pwCancel:()=>{U=S.usuarios.find(z=>z.id===S.config.ses)||null;render()},
   newUser:()=>userForm(null),
   logoDel:()=>{const F={...fmtImp(),id:'formato'};F.logo='';put('ajustes',F);logoBuf=null;render();toast('Logo quitado')},
   printMin:()=>{const b=document.querySelector('[data-act="printMin"]');const m=b&&byId('minutas',b.dataset.min);if(m)previewMinuta(m)},
@@ -995,9 +1008,10 @@ function revisar(acc,id){const x=byId('bitacora',id);if(!x||!isAdmin())return;co
   if(acc==='rechazar'){const m=($('#motivo')||{}).value||'';if(!m.trim()){$('#revErr').textContent='Escribe el motivo del rechazo para que el autor lo corrija.';return}b.estado='rechazada';b.motivo=m.trim()}
   else{b.estado='aprobada';b.motivo='';if(!b.folio)b.folio=nextFolio(b.obraId)}
   b.aprobadoPor=U.nombre;b.fechaAprob=now;put('bitacora',b,acc==='aprobar'?'aprobó':'rechazó');closeModal();render();toast(acc==='aprobar'?'Nota aprobada con folio '+b.folio:'Nota rechazada')}
-function userForm(id){const cl=S.sync.on&&S.sync.url;const u=id?(cl?(()=>{const x=Sync.perfiles.find(z=>z.email===id);return x?{id:x.email,email:x.email,nombre:x.nombre,rol:x.rol,obraId:x.obra_id||''}:null})():S.usuarios.find(z=>z.id===id)):{rol:'coordObra',obraId:(S.obras[0]||{}).id||''};if(!u)return;
+function userForm(id){if(!isAdmin())return;const cl=S.sync.on&&S.sync.url;const u=id?(cl?(()=>{const x=Sync.perfiles.find(z=>z.email===id);return x?{id:x.email,email:x.email,nombre:x.nombre,rol:x.rol,obraId:x.obra_id||''}:null})():S.usuarios.find(z=>z.id===id)):{rol:'coordObra',obraId:(S.obras[0]||{}).id||''};if(!u)return;
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><form class="modal" id="userForm" data-id="${esc(id||'')}" novalidate><div class="mh"><h2>${id?'Editar usuario':'Agregar usuario'}</h2><button type="button" class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">
     <div class="fld full"><label for="uNom">Nombre *</label><input id="uNom" name="nombre" value="${esc(u.nombre||'')}"></div>
+    ${!cl?`<div class="fld"><label for="uUser">Usuario para entrar *</label><input id="uUser" name="usuario" autocapitalize="none" spellcheck="false" value="${esc(u.usuario||'')}"></div><div class="fld"><label for="uPw">${id?'Nueva contraseña (opcional)':'Contraseña temporal *'}</label><input id="uPw" name="pw" type="text" autocomplete="off" placeholder="${id?'Déjala vacía para no cambiarla':'Mínimo 8 caracteres'}"><span class="hint">La persona la cambiará al entrar por primera vez.</span></div>`:''}
     ${cl?`<div class="fld full"><label for="uMail">Correo con el que entra *</label><input id="uMail" name="email" type="email" value="${esc(u.email||'')}" ${id?'readonly':''}><span class="hint">Primero créalo en Supabase → Authentication → Users con este mismo correo.</span></div>`:''}
     <div class="fld"><label for="uRolSel">Rol</label><select id="uRolSel" name="rol">${Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${u.rol===k?'selected':''}>${v}</option>`).join('')}</select></div>
     <div class="fld"><label for="uObra">Contrato asignado</label><select id="uObra" name="obraId"><option value="">Todos (solo gerente y coordinador)</option>${S.obras.map(o=>`<option value="${o.id}" ${u.obraId===o.id?'selected':''}>${esc(o.aeropuerto||'')} · ${esc(o.numero)}</option>`).join('')}</select></div>
@@ -1005,12 +1019,18 @@ function userForm(id){const cl=S.sync.on&&S.sync.url;const u=id?(cl?(()=>{const 
     <div class="mf">${id&&id!==(U&&U.id)?`<button type="button" class="btn danger" id="uDel" style="margin-right:auto">${ic('trash')}Quitar acceso</button>`:''}<button type="button" class="btn" data-close="1">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
   const d=$('#uDel');if(d)d.onclick=async()=>{if(!d.dataset.sure){d.dataset.sure=1;d.textContent='Toca otra vez para quitar';return}
     if(cl){const{error}=await Sync.cli.from('perfiles').delete().eq('email',id);if(error){$('#uErr').textContent=error.message;return}Sync.perfiles=Sync.perfiles.filter(z=>z.email!==id)}else{S.usuarios=S.usuarios.filter(z=>z.id!==id);saveUsers()}closeModal();render();toast('Acceso quitado')}}
-async function saveUserForm(f){const cl=S.sync.on&&S.sync.url;const nombre=f.nombre.value.trim(),rol=f.rol.value,obraId=['gerente','coordinador'].includes(rol)?'':f.obraId.value;const er=$('#uErr');
+async function saveUserForm(f){if(!isAdmin())return;const cl=S.sync.on&&S.sync.url;const nombre=f.nombre.value.trim(),rol=f.rol.value,obraId=['gerente','coordinador'].includes(rol)?'':f.obraId.value;const er=$('#uErr');
   if(!nombre){er.textContent='Escribe el nombre.';return}if(!['gerente','coordinador'].includes(rol)&&!obraId){er.textContent='Asigna el contrato que verá este usuario.';return}
   if(cl){const email=(f.email.value||'').trim().toLowerCase();if(!/.+@.+\..+/.test(email)){er.textContent='Escribe un correo válido.';return}if(!Sync.cli){er.textContent='Conéctate para administrar usuarios.';return}
     const{error}=await Sync.cli.from('perfiles').upsert({email,nombre,rol,obra_id:obraId||null});if(error){er.textContent=error.message;return}
     Sync.perfiles=[...Sync.perfiles.filter(z=>z.email!==email),{email,nombre,rol,obra_id:obraId||null}]}
-  else{const id=f.dataset.id;if(id){Object.assign(S.usuarios.find(z=>z.id===id),{nombre,rol,obraId});if(U&&U.id===id)U=S.usuarios.find(z=>z.id===id)}else S.usuarios.push({id:uid(),nombre,rol,obraId,email:''});saveUsers()}
+  else{const id=f.dataset.id;const usuario=f.usuario.value.trim().toLowerCase(),pw=f.pw.value;
+    if(!/^[a-z0-9._-]{3,30}$/.test(usuario)){er.textContent='El usuario lleva de 3 a 30 letras o números, sin espacios ni acentos.';return}
+    if(S.usuarios.some(z=>z.usuario===usuario&&z.id!==id)){er.textContent='Ese usuario ya existe.';return}
+    if((!id||pw)&&pw.length<8){er.textContent='La contraseña debe tener al menos 8 caracteres.';return}
+    if(id&&U&&U.id===id&&!['gerente','coordinador'].includes(rol)&&S.usuarios.filter(z=>['gerente','coordinador'].includes(z.rol)).length<2){er.textContent='No puedes quitarte el rol de administrador: quedaría la app sin nadie que dé permisos.';return}
+    const extra=pw?{pw:await hashPw(pw),cambiar:true}:{};
+    if(id){Object.assign(S.usuarios.find(z=>z.id===id),{nombre,rol,obraId,usuario},extra);if(U&&U.id===id)U={...S.usuarios.find(z=>z.id===id),cambiar:false}}else S.usuarios.push({id:uid(),nombre,rol,obraId,usuario,email:'',...extra});saveUsers()}
   closeModal();render();toast('Usuario guardado')}
 function minutaHTML(m){const o=byId('obras',m.obraId)||{};const F=fmtImp();const ac=S.pendientes.filter(p=>p.minutaId===m.id);
   const as=asList(m);
@@ -1046,7 +1066,7 @@ async function showDoc(d){const k=docKind(d);let url=null,blob=await fileGet(d.i
   if(blob)url=URL.createObjectURL(blob);
   const prev=!url?`<div class="empty">${d.archivo?(d.ruta?'El archivo está en la nube. Conéctate para verlo.':'El archivo no está en este dispositivo.'):'Este registro no tiene archivo adjunto. Edítalo para subir uno.'}</div>`:k[0]==='pdf'?`<iframe class="viewer" src="${url}" title="${esc(d.nombre)}"></iframe>`:k[0]==='img'?`<img src="${url}" alt="" style="width:100%;border-radius:10px">`:`<div class="empty">Vista previa no disponible para este tipo de archivo.</div>`;
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:960px"><div class="mh"><h2>${esc(d.nombre)}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr">${prev}<div class="kv"><div>Tipo</div><div>${esc(d.tipo)}</div><div>Obra</div><div style="white-space:normal">${esc(obraTxt(d.obraId))}</div><div>Fecha</div><div class="num">${fD(d.fecha)}</div><div>Archivo</div><div style="white-space:normal">${esc(d.archivo||'—')}</div>${d.notas?`<div>Notas</div><div style="white-space:pre-wrap">${esc(d.notas)}</div>`:''}</div></div><div class="mf">${url?`<a class="btn" href="${url}" target="_blank" rel="noopener" download="${esc(d.archivo)}">Abrir o descargar</a>`:''}<button class="btn pri" data-edit="documentos:${d.id}">${ic('edit')}Editar</button></div></div></div>`}
-function moreSheet(){$('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal sheet"><div class="mh"><h2>Más</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${NAV.filter(n=>!BNAV.some(b=>b[0]===n[0])).map(([k,l,i])=>`<button data-go="${k}">${ic(i)}${l}</button>`).join('')}</div></div></div>`}
+function moreSheet(){$('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal sheet"><div class="mh"><h2>Más</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${(B=>navFor().filter(n=>!B.some(b=>b[0]===n[0])))(bnavFor()).map(([k,l,i])=>`<button data-go="${k}">${ic(i)}${l}</button>`).join('')}</div></div></div>`}
 function getGPS(id){const h=$('#'+id+'-h');try{if(!navigator.geolocation)throw 0;h.textContent='Buscando señal GPS…';navigator.geolocation.getCurrentPosition(p=>{$('#'+id).value=p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6);h.textContent=`Precisión aprox. ${Math.round(p.coords.accuracy)} m`},()=>{h.textContent='No se pudo leer el GPS. Revisa el permiso de ubicación o escribe las coordenadas.'},{enableHighAccuracy:true,timeout:15000})}catch(e){h.textContent='Este dispositivo no permite leer el GPS aquí. Escribe las coordenadas.'}}
 
 /* ---------- Eventos ---------- */
@@ -1055,7 +1075,6 @@ document.addEventListener('click',e=>{const t=e.target;
   const g=t.closest('[data-go]');if(g){closeModal();const k=g.dataset.go;if(k==='mas'){moreSheet();return}V.q='';$('#q').value='';go(k);return}
   if(t.closest('[data-asadd]')){$('#asList').insertAdjacentHTML('beforeend',asRow({nombre:'',cargo:'',empresa:''}));const r=$('#asList').lastElementChild;r.querySelector('input').focus();return}
   if(t.closest('[data-asdel]')){const r=t.closest('.as-row');if(r)r.remove();return}
-  const as=t.closest('[data-as]');if(as){S.config.uid=as.dataset.as;persist('config');U=S.usuarios.find(z=>z.id===S.config.uid)||null;closeModal();V.obra='';go(isExt()?'bitacora':'panel');toast('Ahora ves la app como '+(U?ROLES[U.rol]:''));return}
   const us=t.closest('[data-user]');if(us){userForm(us.dataset.user);return}
   const rv=t.closest('[data-rev]');if(rv){const[a,id]=rv.dataset.rev.split(':');revisar(a,id);return}
   const bt=t.closest('[data-bit]');if(bt){showBit(byId('bitacora',bt.dataset.bit));return}
@@ -1083,6 +1102,13 @@ document.addEventListener('change',async ev=>{const t=ev.target;
 });
 document.addEventListener('submit',async ev=>{const f=ev.target;
   if(f.id==='userForm'){ev.preventDefault();saveUserForm(f)}
+  if(f.id==='locLogin'){ev.preventDefault();const er=$('#lgErr');const usuario=f.usuario.value.trim().toLowerCase();const u=S.usuarios.find(z=>z.usuario===usuario);
+    if(!usuario||!f.pw.value){er.textContent='Escribe tu usuario y contraseña.';return}
+    if(!u||!await checkPw(u,f.pw.value)){er.textContent='Usuario o contraseña incorrectos.';f.pw.value='';return}
+    S.config.ses=u.id;S.config.lastUser=usuario;persist('config');U=u;V.obra='';V.view=isExt()?'bitacora':'panel';render();if(!u.cambiar)toast('Hola, '+u.nombre)}
+  if(f.id==='pwForm'){ev.preventDefault();const er=$('#pwErr');const a=f.pw1.value,b=f.pw2.value;
+    if(a.length<8){er.textContent='Usa al menos 8 caracteres.';return}if(a!==b){er.textContent='Las dos contraseñas no coinciden.';return}if(a===PW_TEMP){er.textContent='Elige una distinta a la temporal.';return}
+    const me=S.usuarios.find(z=>z.id===U.id);if(!me)return;me.pw=await hashPw(a);me.cambiar=false;saveUsers();U=me;render();toast('Contraseña guardada')}
   if(f.id==='fmtForm'){ev.preventDefault();if(!isAdmin())return;const F={...fmtImp(),id:'formato',empresa:f.empresa.value.trim(),area:f.area.value.trim(),codigo:f.codigo.value.trim()};if(logoBuf)F.logo=logoBuf;put('ajustes',F);logoBuf=null;render();toast('Formato guardado')}
   if(f.id==='loginForm'){ev.preventDefault();const er=$('#lgErr');er.textContent='Entrando…';const m=await Sync.login(f.email.value.trim(),f.pw.value);if(m)er.textContent='No se pudo entrar: '+m;else if(!U)er.textContent=Sync.msg||'Tu usuario no tiene un rol asignado.';else go(isExt()?'bitacora':'panel')}
   if(f.id==='syncForm'){ev.preventDefault();const url=f.url.value.trim().replace(/\/+$/,''),key=f.key.value.trim(),email=f.email.value.trim(),pw=f.pw.value;const er=$('#syncErr');
@@ -1105,8 +1131,8 @@ window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h
   await openDB();
   const has=await idbGet('obras');
   if(has===undefined){seed()}else{for(const c of COLS)S[c]=(await idbGet(c))||[];S.config={...S.config,...((await idbGet('config'))||{})};S.cola=(await idbGet('cola'))||[];S.sync={...S.sync,...((await idbGet('sync'))||{})}}
-  S.usuarios=(await idbGet('usuarios'))||[];if(!S.usuarios.length)seedUsers();
-  U=S.sync.on&&S.sync.url?(S.config.cloudU||null):(S.usuarios.find(z=>z.id===S.config.uid)||S.usuarios.find(z=>z.rol==='coordinador')||null);
+  S.usuarios=(await idbGet('usuarios'))||[];if(!S.usuarios.length)seedUsers();await ensureCreds();
+  U=S.sync.on&&S.sync.url?(S.config.cloudU||null):(S.config.ses&&S.usuarios.find(z=>z.id===S.config.ses)||null);
   const h=location.hash.slice(1);if(NAV.some(n=>n[0]===h))V.view=h;
   render();updNet();
   if(!inClaude)Sync.start();
