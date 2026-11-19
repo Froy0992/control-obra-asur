@@ -482,12 +482,15 @@ const ROLES={gerente:'Gerente de infraestructura',coordinador:'Coordinador de in
 let U=null;
 const isAdmin=()=>!!U&&(U.rol==='gerente'||U.rol==='coordinador');
 const isExt=()=>!!U&&(U.rol==='contratista'||U.rol==='supervision');
-const isContra=()=>!!U&&U.rol==='contratista';
+// Contratista y supervisión ven su obra, avance y estimaciones; supervisión además carga avance y estimaciones
+const isContra=()=>isExt();
+const isSup=()=>!!U&&U.rol==='supervision';
+const SUP_CARGA=['avances','estimaciones'];
 const CONTRA_VE=['obras','bitacora','avances','estimaciones','convenios'];
 function visible(col,x){if(col==='ajustes'||isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isContra())return CONTRA_VE.includes(col);if(isExt())return col==='obras'||col==='bitacora';return true}
 const D=new Proxy({},{get:(_,col)=>(S[col]||[]).filter(x=>visible(col,x))});
-function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())return col==='bitacora';return col!=='obras'&&col!=='historial'}
-function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return false;return col!=='historial'}
+function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())return col==='bitacora'||(isSup()&&SUP_CARGA.includes(col));return col!=='obras'&&col!=='historial'}
+function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
 const COL_L={obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
 const refTxt=(col,o)=>col==='estimaciones'?'Estimación '+o.numero:col==='avances'?'Corte del '+fD(o.fecha):col==='bitacora'?(o.folio?'Nota '+o.folio:'Nota sin folio')+' · '+(o.tipo||''):col==='convenios'?'Convenio '+(o.numero||''):String(o.titulo||o.nombre||o.concepto||o.numero||'');
 const SKIP=['upd','por','porId','ruta','mime','size','ejemplo','aprobadoPor','fechaAprob'];
@@ -622,23 +625,25 @@ drop policy if exists "editar" on registros;
 create policy "leer" on registros for select to authenticated using (
   es_admin()
   or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial')
-  or (mi_rol() = 'contratista' and obra_id = mi_obra() and col in ('obras','bitacora','avances','estimaciones','convenios'))
-  or (mi_rol() = 'supervision' and obra_id = mi_obra() and col in ('obras','bitacora'))
+  or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col in ('obras','bitacora','avances','estimaciones','convenios'))
   or col = 'ajustes');
 create policy "crear" on registros for insert to authenticated with check (
   es_admin()
   or (mi_rol() = 'coordObra' and obra_id = mi_obra() and (col <> 'bitacora' or data->>'estado' = 'cargada'))
   or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra()
-      and (col = 'historial' or (col = 'bitacora' and data->>'estado' = 'cargada'))));
+      and (col = 'historial' or (col = 'bitacora' and data->>'estado' = 'cargada')))
+  or (mi_rol() = 'supervision' and obra_id = mi_obra() and col in ('avances','estimaciones')));
 create policy "editar" on registros for update to authenticated
   using (
     es_admin()
     or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial' and (col <> 'bitacora' or data->>'estado' = 'cargada'))
-    or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada'))
+    or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada')
+    or (mi_rol() = 'supervision' and obra_id = mi_obra() and col in ('avances','estimaciones')))
   with check (
     es_admin()
     or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial' and (col <> 'bitacora' or data->>'estado' = 'cargada'))
-    or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada'));
+    or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada')
+    or (mi_rol() = 'supervision' and obra_id = mi_obra() and col in ('avances','estimaciones')));
 
 -- Tu propio usuario como coordinador (cambia el correo y el nombre):
 -- insert into perfiles values ('tu-correo@ejemplo.com','Tu nombre','coordinador',null);
@@ -875,7 +880,7 @@ config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfi
     <div class="fld"><label for="fmtCod">Código del formato (opcional)</label><input id="fmtCod" name="codigo" value="${esc(F.codigo||'')}"></div>
   </div><div class="mf" style="padding:12px 0 0;border:0">${F.logo?`<button type="button" class="btn" data-act="logoDel">Quitar logo</button>`:''}<button class="btn pri">Guardar formato</button></div></form></div></div>`})():''}
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Usuarios y permisos</h2><button class="btn sm" data-act="newUser">${ic('plus')}Agregar usuario</button></div><div class="card-b">
-    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión solo suben notas de bitácora de su contrato. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo. Solo ustedes dos pueden crear usuarios, asignar contraseñas y cambiar permisos.</p>
+    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión suben notas de bitácora y consultan el avance y las estimaciones de su contrato; supervisión además carga el avance físico y financiero y las estimaciones. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo. Solo ustedes dos pueden crear usuarios, asignar contraseñas y cambiar permisos.</p>
     <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Contrato</th><th>${cl?'Correo':'Usuario'}</th><th></th></tr></thead><tbody>${users.map(u=>`<tr class="click" data-user="${esc(u.id)}"><td><b>${esc(u.nombre)}</b></td><td>${esc(ROLES[u.rol]||u.rol)}</td><td>${u.obraId?esc(obraCorto(u.obraId)):'Todos'}</td><td class="num">${esc(cl?u.email:(u.usuario||''))}</td><td class="r">${ic('edit','width="16" height="16"')}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}
   ${isAdmin()||!cl?`<div class="card"><div class="card-h"><h2>Sincronización en tiempo real</h2>${stPill()}</div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
     <p style="margin:0;max-width:70ch">Conecta la app a un proyecto gratuito de Supabase para que todo tu equipo vea los mismos avances, estimaciones, pendientes y evidencias al momento. Sin señal se sigue capturando y se sube solo al regresar la conexión.</p>
@@ -951,7 +956,7 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
     else if(t==='gps')inp=`<div class="row" style="flex-wrap:nowrap"><input id="${id}" name="${k}" value="${esc(v)}" placeholder="lat, long" style="flex:1"><button type="button" class="btn sm" data-gps="${id}">${ic('pin')}GPS</button></div><span class="hint" id="${id}-h"></span>`;
     else inp=`<input id="${id}" name="${k}" type="${t}" value="${esc(v)}">`;
     return `<div class="fld ${full?'full':''}"${when?` data-when="${when[0]}=${esc(when[1])}"${String(o[when[0]]??'')===when[1]?'':' hidden'}`:''}>${lab}${inp}${hint||when?`<span class="hint" id="${id}-h">${hint||''}</span>`:''}</div>`};
-  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><form class="modal" id="frm" novalidate><div class="mh"><h2>${title||(o.id?'Editar ':'Nueva ')+F.t.toLowerCase()}</h2><button type="button" class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${F.f.map(fld).join('')}${extra}<div class="fld full"><span class="note" id="frmErr" style="color:var(--bad)"></span></div></div><div class="mf">${o.id?`<button type="button" class="btn danger" id="frmDel" style="margin-right:auto">${ic('trash')}Eliminar</button>`:''}<button type="button" class="btn" data-close="1">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><form class="modal" id="frm" novalidate><div class="mh"><h2>${title||(o.id?'Editar ':/^(Corte|Convenio|Documento|Pendiente)/.test(F.t)?'Nuevo ':'Nueva ')+F.t.toLowerCase()}</h2><button type="button" class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${F.f.map(fld).join('')}${extra}<div class="fld full"><span class="note" id="frmErr" style="color:var(--bad)"></span></div></div><div class="mf">${o.id?`<button type="button" class="btn danger" id="frmDel" style="margin-right:auto">${ic('trash')}Eliminar</button>`:''}<button type="button" class="btn" data-close="1">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
   const form=$('#frm');
   form.onsubmit=e=>{e.preventDefault();const out={...o};let miss=[];
     F.f.forEach(([k,l,t,req,,,,when])=>{if(when&&String(form.elements[when[0]]?.value)!==when[1]){delete out[k];return}if(t==='asist'){out.asistentes=[...form.querySelectorAll('.as-row')].map(r=>({nombre:r.querySelector('[data-k=nombre]').value.trim(),cargo:r.querySelector('[data-k=cargo]').value.trim(),empresa:r.querySelector('[data-k=empresa]').value.trim()})).filter(a=>a.nombre);return}if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
