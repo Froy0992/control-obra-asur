@@ -220,6 +220,9 @@ td.r,th.r{text-align:right}
 .fld .hint{font-size:12px;color:var(--muted)}
 .pv{display:flex;gap:8px;flex-wrap:wrap}
 .pv img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.pv-it{position:relative;display:inline-block}
+.pv-x{all:unset;cursor:pointer;position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;background:var(--ink2,#333);color:#fff;font-size:12px;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.ph-btn{cursor:pointer;flex:1 1 140px;justify-content:center;white-space:nowrap}
 .x{all:unset;cursor:pointer;width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
 .x:hover{background:var(--surface-2)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:10px;z-index:80;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:calc(100% - 32px)}
@@ -479,10 +482,15 @@ const ROLES={gerente:'Gerente de infraestructura',coordinador:'Coordinador de in
 let U=null;
 const isAdmin=()=>!!U&&(U.rol==='gerente'||U.rol==='coordinador');
 const isExt=()=>!!U&&(U.rol==='contratista'||U.rol==='supervision');
-function visible(col,x){if(col==='ajustes'||isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isExt())return col==='obras'||col==='bitacora';return true}
+// Contratista y supervisión ven su obra, avance y estimaciones; supervisión además carga avance y estimaciones
+const isContra=()=>isExt();
+const isSup=()=>!!U&&U.rol==='supervision';
+const SUP_CARGA=['avances','estimaciones'];
+const CONTRA_VE=['obras','bitacora','avances','estimaciones','convenios'];
+function visible(col,x){if(col==='ajustes'||isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isContra())return CONTRA_VE.includes(col);if(isExt())return col==='obras'||col==='bitacora';return true}
 const D=new Proxy({},{get:(_,col)=>(S[col]||[]).filter(x=>visible(col,x))});
-function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())return col==='bitacora';return col!=='obras'&&col!=='historial'}
-function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return false;return col!=='historial'}
+function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())return col==='bitacora'||(isSup()&&SUP_CARGA.includes(col));return col!=='obras'&&col!=='historial'}
+function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
 const COL_L={obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
 const refTxt=(col,o)=>col==='estimaciones'?'Estimación '+o.numero:col==='avances'?'Corte del '+fD(o.fecha):col==='bitacora'?(o.folio?'Nota '+o.folio:'Nota sin folio')+' · '+(o.tipo||''):col==='convenios'?'Convenio '+(o.numero||''):String(o.titulo||o.nombre||o.concepto||o.numero||'');
 const SKIP=['upd','por','porId','ruta','mime','size','ejemplo','aprobadoPor','fechaAprob'];
@@ -617,22 +625,25 @@ drop policy if exists "editar" on registros;
 create policy "leer" on registros for select to authenticated using (
   es_admin()
   or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial')
-  or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col in ('obras','bitacora'))
+  or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col in ('obras','bitacora','avances','estimaciones','convenios'))
   or col = 'ajustes');
 create policy "crear" on registros for insert to authenticated with check (
   es_admin()
   or (mi_rol() = 'coordObra' and obra_id = mi_obra() and (col <> 'bitacora' or data->>'estado' = 'cargada'))
   or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra()
-      and (col = 'historial' or (col = 'bitacora' and data->>'estado' = 'cargada'))));
+      and (col = 'historial' or (col = 'bitacora' and data->>'estado' = 'cargada')))
+  or (mi_rol() = 'supervision' and obra_id = mi_obra() and col in ('avances','estimaciones')));
 create policy "editar" on registros for update to authenticated
   using (
     es_admin()
     or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial' and (col <> 'bitacora' or data->>'estado' = 'cargada'))
-    or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada'))
+    or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada')
+    or (mi_rol() = 'supervision' and obra_id = mi_obra() and col in ('avances','estimaciones')))
   with check (
     es_admin()
     or (mi_rol() = 'coordObra' and obra_id = mi_obra() and col <> 'historial' and (col <> 'bitacora' or data->>'estado' = 'cargada'))
-    or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada'));
+    or (mi_rol() in ('contratista','supervision') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada')
+    or (mi_rol() = 'supervision' and obra_id = mi_obra() and col in ('avances','estimaciones')));
 
 -- Tu propio usuario como coordinador (cambia el correo y el nombre):
 -- insert into perfiles values ('tu-correo@ejemplo.com','Tu nombre','coordinador',null);
@@ -683,8 +694,8 @@ function updNet(){const n=S.cola.length,on=navigator.onLine,b=$('#net');if(!b)re
 /* ---------- Navegación ---------- */
 const NAV_ALL=[['panel','Panel','home'],['obras','Obras','build'],['estimaciones','Estimaciones','cash'],['pendientes','Pendientes y acuerdos','check'],['minutas','Minutas','users'],['bitacora','Bitácora','book'],['evidencias','Evidencias','camera'],['documentos','Documentos','folder'],['historial','Historial','sync'],['config','Ajustes','gear']];
 const NAV=NAV_ALL;
-function navFor(){if(!U)return [['config','Ajustes','gear']];if(isExt())return NAV_ALL.filter(n=>['bitacora','config'].includes(n[0]));if(isAdmin())return NAV_ALL;return NAV_ALL.filter(n=>n[0]!=='historial')}
-function bnavFor(){if(isExt())return [['bitacora','Bitácora','book'],['config','Ajustes','gear']];return [['panel','Panel','home'],['obras','Obras','build'],['pendientes','Pendientes','check'],['evidencias','Evidencias','camera'],['mas','Más','more']]}
+function navFor(){if(!U)return [['config','Ajustes','gear']];if(isContra())return NAV_ALL.filter(n=>['obras','estimaciones','bitacora','config'].includes(n[0]));if(isExt())return NAV_ALL.filter(n=>['bitacora','config'].includes(n[0]));if(isAdmin())return NAV_ALL;return NAV_ALL.filter(n=>n[0]!=='historial')}
+function bnavFor(){if(isContra())return [['obras','Mi obra','build'],['estimaciones','Estimaciones','cash'],['bitacora','Bitácora','book'],['config','Ajustes','gear']];if(isExt())return [['bitacora','Bitácora','book'],['config','Ajustes','gear']];return [['panel','Panel','home'],['obras','Obras','build'],['pendientes','Pendientes','check'],['evidencias','Evidencias','camera'],['mas','Más','more']]}
 const porAprobar=()=>D.bitacora.filter(b=>b.estado==='cargada'||b.estado==='revision');
 const V={view:'panel',id:null,tab:'resumen',obra:'',f:'',q:''};
 function go(view,id=null,tab='resumen'){V.view=view;V.id=id;V.tab=tab;V.f='';try{if(location.hash.slice(1)!==view)history.replaceState(null,'','#'+view)}catch(e){}render();window.scrollTo(0,0)}
@@ -700,7 +711,8 @@ function render(){const N=navFor();if(V.view!=='buscar'&&!N.some(n=>n[0]===V.vie
   const fm=V.view==='obras'&&V.id?'newEv':FAB[V.view];$('#fab').hidden=!U||!fm||(V.view==='obras'&&!V.id&&!isAdmin())||!canCreate(FAB_COL[fm]);bindCharts()}
 
 /* ---------- Piezas de interfaz ---------- */
-const empty=(t,act,lbl)=>`<div class="empty">${esc(t)}${act?`<div style="margin-top:12px"><button class="btn sm" data-act="${act}">${ic('plus')}${lbl}</button></div>`:''}</div>`;
+const ACT_COL={...FAB_COL,newConv:'convenios'};
+const empty=(t,act,lbl)=>`<div class="empty">${esc(t)}${act&&(!ACT_COL[act]||canCreate(ACT_COL[act]))?`<div style="margin-top:12px"><button class="btn sm" data-act="${act}">${ic('plus')}${lbl}</button></div>`:''}</div>`;
 const duo=(r)=>`<div class="duo"><small><span>Físico ${pct(r.fis)}</span><span>prog. ${pct(r.prog)}</span></small><div class="bar"><i style="width:${clamp(r.fis,0,100)}%"></i></div><small><span>Financiero ${pct(r.fin)}</span></small><div class="bar"><i class="f" style="width:${clamp(r.fin,0,100)}%"></i></div></div>`;
 function obraSel(){if(!isAdmin()&&D.obras.length<=1)return '';return `<select class="sel" id="obraFil" aria-label="Filtrar por obra"><option value="">Todas las obras</option>${D.obras.map(o=>`<option value="${o.id}" ${V.obra===o.id?'selected':''}>${esc(o.aeropuerto?o.aeropuerto+' · ':'')}${esc(o.nombre)}</option>`).join('')}</select>`}
 const chips=(opts)=>`<div class="chips">${opts.map(([k,l])=>`<button class="chip" data-f="${k}" aria-pressed="${V.f===k}">${esc(l)}</button>`).join('')}</div>`;
@@ -811,7 +823,7 @@ obras(){if(V.id)return obraDetail(byId('obras',V.id));
 estimaciones(){const obs=D.obras.filter(o=>!V.obra||o.id===V.obra);const rs=obs.map(o=>[o,resumen(o)]);const T=k=>rs.reduce((a,[,r])=>a+r[k],0);
   const es=D.estimaciones.filter(e=>(!V.obra||e.obraId===V.obra)&&(!V.f||e.estado===V.f));
   const tv=T('vig'),te=T('est');
-  return `${phead('Estimaciones','Importes sin IVA. Las devueltas no cuentan en los acumulados.',obraSel()+`<button class="btn pri hide-m" data-act="newEst">${ic('plus')}Registrar estimación</button>`)}
+  return `${phead('Estimaciones','Importes sin IVA. Las devueltas no cuentan en los acumulados.',obraSel()+(canCreate('estimaciones')?`<button class="btn pri hide-m" data-act="newEst">${ic('plus')}Registrar estimación</button>`:''))}
   <div class="card"><div class="card-h"><h2>Resumen de estimaciones</h2></div><div class="card-b">${rs.length?`<div class="tbl-wrap"><table><thead><tr><th>Obra</th><th class="r">Monto vigente</th><th class="r">Estimado</th><th class="r">% fin.</th><th class="r">Autorizado</th><th class="r">Pagado neto</th><th class="r">En trámite</th><th class="r">Anticipo por amortizar</th><th class="r">Saldo por estimar</th></tr></thead><tbody>${rs.map(([o,r])=>`<tr class="click" data-obra="${o.id}" data-tab="estimaciones"><td><b>${esc(o.aeropuerto||'')}</b> · ${esc(o.numero)}<div class="note">${r.n} estimaciones</div></td><td class="r num">${money(r.vig)}</td><td class="r num">${money(r.est)}</td><td class="r num"><b>${pct(r.fin)}</b></td><td class="r num">${money(r.aut)}</td><td class="r num">${money(r.pag)}</td><td class="r num">${money(r.tram)}</td><td class="r num">${money(r.porAmort)}</td><td class="r num">${money(r.saldo)}</td></tr>`).join('')}
   <tr><td><b>Total</b></td><td class="r num"><b>${money(tv)}</b></td><td class="r num"><b>${money(te)}</b></td><td class="r num"><b>${pct(tv?te/tv*100:0)}</b></td><td class="r num"><b>${money(T('aut'))}</b></td><td class="r num"><b>${money(T('pag'))}</b></td><td class="r num"><b>${money(T('tram'))}</b></td><td class="r num"><b>${money(T('porAmort'))}</b></td><td class="r num"><b>${money(T('saldo'))}</b></td></tr></tbody></table></div>`:empty('Sin obras.')}</div></div>
   <div class="card"><div class="card-h"><h2>Estimaciones</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">${chips([['','Todas'],...Object.entries(ES_EST).map(([k,v])=>[k,v[0]])])}${estTable(es,!V.obra)}</div></div>`},
@@ -868,7 +880,7 @@ config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfi
     <div class="fld"><label for="fmtCod">Código del formato (opcional)</label><input id="fmtCod" name="codigo" value="${esc(F.codigo||'')}"></div>
   </div><div class="mf" style="padding:12px 0 0;border:0">${F.logo?`<button type="button" class="btn" data-act="logoDel">Quitar logo</button>`:''}<button class="btn pri">Guardar formato</button></div></form></div></div>`})():''}
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Usuarios y permisos</h2><button class="btn sm" data-act="newUser">${ic('plus')}Agregar usuario</button></div><div class="card-b">
-    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión solo suben notas de bitácora de su contrato. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo. Solo ustedes dos pueden crear usuarios, asignar contraseñas y cambiar permisos.</p>
+    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión suben notas de bitácora y consultan el avance y las estimaciones de su contrato; supervisión además carga el avance físico y financiero y las estimaciones. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo. Solo ustedes dos pueden crear usuarios, asignar contraseñas y cambiar permisos.</p>
     <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Contrato</th><th>${cl?'Correo':'Usuario'}</th><th></th></tr></thead><tbody>${users.map(u=>`<tr class="click" data-user="${esc(u.id)}"><td><b>${esc(u.nombre)}</b></td><td>${esc(ROLES[u.rol]||u.rol)}</td><td>${u.obraId?esc(obraCorto(u.obraId)):'Todos'}</td><td class="num">${esc(cl?u.email:(u.usuario||''))}</td><td class="r">${ic('edit','width="16" height="16"')}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}
   ${isAdmin()||!cl?`<div class="card"><div class="card-h"><h2>Sincronización en tiempo real</h2>${stPill()}</div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
     <p style="margin:0;max-width:70ch">Conecta la app a un proyecto gratuito de Supabase para que todo tu equipo vea los mismos avances, estimaciones, pendientes y evidencias al momento. Sin señal se sigue capturando y se sube solo al regresar la conexión.</p>
@@ -885,7 +897,7 @@ config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfi
   </div></div>`:''}`}
 };
 
-function obraDetail(o){if(!o)return empty('Esta obra ya no existe.');const r=resumen(o);const tabs=[['resumen','Resumen'],['estimaciones','Estimaciones'],['avance','Avance'],['pendientes','Pendientes'],['minutas','Minutas'],['bitacora','Bitácora'],['evidencias','Evidencias'],['documentos','Documentos'],...(isAdmin()?[['historial','Historial']]:[])];
+function obraDetail(o){if(!o)return empty('Esta obra ya no existe.');const r=resumen(o);const tabs=isExt()?[['resumen','Resumen'],...(isContra()?[['estimaciones','Estimaciones'],['avance','Avance']]:[]),['bitacora','Bitácora']]:[['resumen','Resumen'],['estimaciones','Estimaciones'],['avance','Avance'],['pendientes','Pendientes'],['minutas','Minutas'],['bitacora','Bitácora'],['evidencias','Evidencias'],['documentos','Documentos'],...(isAdmin()?[['historial','Historial']]:[])];if(!tabs.some(t=>t[0]===V.tab))V.tab='resumen';
   const cnt={estimaciones:ofObra('estimaciones',o.id).length,pendientes:abiertos(o.id).length,minutas:ofObra('minutas',o.id).length,bitacora:ofObra('bitacora',o.id).length,evidencias:ofObra('evidencias',o.id).length,documentos:ofObra('documentos',o.id).length};
   const add0={estimaciones:['newEst','Registrar estimación'],avance:['newAv','Registrar corte de avance'],pendientes:['newPen','Nuevo pendiente'],minutas:['newMin','Nueva minuta'],bitacora:['newBit','Nueva nota'],evidencias:['newEv','Subir evidencia'],documentos:['newDoc','Subir documento']}[V.tab];const add=add0&&canCreate(FAB_COL[add0[0]])?add0:null;
   let body='';
@@ -898,8 +910,8 @@ function obraDetail(o){if(!o)return empty('Esta obra ya no existe.');const r=res
         <div>Inicio</div><div class="num">${fD(o.inicio)}</div><div>Término original</div><div class="num">${fD(o.fin)}</div><div>Término vigente</div><div class="num"><b>${fD(fv)}</b></div><div>Plazo</div><div class="num">${tot} días · transcurridos ${tr} · restan ${Math.max(0,dayDiff(HOY(),fv))}</div>
       </div></div></div></div>
       <div class="card"><div class="card-h"><h2>Resumen de estimaciones</h2><button class="link" data-tab="estimaciones">Ver estimaciones</button></div><div class="card-b">${sumGrid(r)}</div></div>
-      <div class="card"><div class="card-h"><h2>Convenios modificatorios</h2><button class="btn sm" data-act="newConv">${ic('plus')}Convenio</button></div><div class="card-b">${cv.length?`<div class="lst">${cv.map(c=>`<div class="li click" data-edit="convenios:${c.id}"><span class="folio">${esc(c.numero)}</span><div style="min-width:0"><b>${esc(c.tipo)}</b><div class="sub num">${fD(c.fecha)} · ${num(c.monto)?money(c.monto):'sin monto'} · ${num(c.dias)?c.dias+' días':'sin plazo'}</div><div class="txt">${esc(c.descripcion||'')}</div></div><div class="acts"></div></div>`).join('')}</div>`:empty('Sin convenios. Al registrar uno se ajustan el monto y la fecha de término vigentes.')}</div></div>
-      <div class="g2"><div class="card"><div class="card-h"><h2>Pendientes abiertos</h2><button class="link" data-tab="pendientes">Ver todos</button></div><div class="card-b">${penList(sortPen(abiertos(o.id)).slice(0,5),false)}</div></div>
+      <div class="card"><div class="card-h"><h2>Convenios modificatorios</h2>${canCreate('convenios')?`<button class="btn sm" data-act="newConv">${ic('plus')}Convenio</button>`:''}</div><div class="card-b">${cv.length?`<div class="lst">${cv.map(c=>`<div class="li click" data-edit="convenios:${c.id}"><span class="folio">${esc(c.numero)}</span><div style="min-width:0"><b>${esc(c.tipo)}</b><div class="sub num">${fD(c.fecha)} · ${num(c.monto)?money(c.monto):'sin monto'} · ${num(c.dias)?c.dias+' días':'sin plazo'}</div><div class="txt">${esc(c.descripcion||'')}</div></div><div class="acts"></div></div>`).join('')}</div>`:empty('Sin convenios. Al registrar uno se ajustan el monto y la fecha de término vigentes.')}</div></div>
+      <div class="g2">${isExt()?'':`<div class="card"><div class="card-h"><h2>Pendientes abiertos</h2><button class="link" data-tab="pendientes">Ver todos</button></div><div class="card-b">${penList(sortPen(abiertos(o.id)).slice(0,5),false)}</div></div>`}
       <div class="card"><div class="card-h"><h2>Bitácora reciente</h2><button class="link" data-tab="bitacora">Ver bitácora</button></div><div class="card-b">${bitList([...ofObra('bitacora',o.id)].sort((a,b)=>a.fecha<b.fecha?1:-1).slice(0,3),false)}</div></div></div>`}
   else if(V.tab==='estimaciones')body=`<div class="card"><div class="card-b" style="padding-top:18px">${sumGrid(r)}</div></div><div class="card"><div class="card-b" style="padding-top:12px">${estTable(ofObra('estimaciones',o.id),false)}</div></div>`;
   else if(V.tab==='avance'){const cs=cortesDe(o.id);body=`<div class="card"><div class="card-h"><h2>Curva de avance</h2>${desvPill(r)}</div><div class="card-b">${sCurve(o)}</div></div><div class="card"><div class="card-h"><h2>Cortes</h2></div><div class="card-b">${cs.length?`<div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th class="r">Programado</th><th class="r">Real</th><th class="r">Desviación</th><th>Nota</th></tr></thead><tbody>${[...cs].reverse().map(c=>{const d=num(c.real)-num(c.programado);return `<tr class="click" data-edit="avances:${c.id}"><td class="num">${fD(c.fecha)}</td><td class="r num">${pct(c.programado)}</td><td class="r num"><b>${pct(c.real)}</b></td><td class="r num" style="color:${d<-3?'var(--bad)':'var(--ok)'}">${d>0?'+':''}${pct(d)}</td><td style="white-space:normal">${esc(c.nota||'')}</td></tr>`}).join('')}</tbody></table></div>`:empty('Sin cortes de avance.','newAv','Registrar corte')}</div></div>`}
@@ -922,11 +934,12 @@ const FORMS={
   avances:{t:'Corte de avance',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha de corte','date',1],['programado','Avance programado acumulado (%)','number',1],['real','Avance físico real acumulado (%)','number',1],['nota','Nota','textarea',0,null,1]]},
   pendientes:{t:'Pendiente',f:[['obraId','Obra','obra',1,null,1],['titulo','Actividad o acuerdo','text',1,null,1],['responsable','Responsable','text'],['compromiso','Fecha compromiso','date'],['prioridad','Prioridad','select',0,Object.entries(PRIO).map(([k,v])=>[k,v[0]])],['estado','Estado','select',0,Object.entries(PE_EST).map(([k,v])=>[k,v[0]])],['notas','Notas','textarea',0,null,1]]},
   minutas:{t:'Minuta',f:[['obraId','Obra','obra',1,null,1],['titulo','Asunto de la reunión','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['lugar','Lugar','text'],['asistentes','Asistentes','asist',0,null,1],['temas','Temas tratados','textarea',0,null,1]]},
-  bitacora:{t:'Nota de bitácora',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha y hora','datetime-local',1],['tipo','Tipo de nota','select',0,BIT_T],['respondeA','Responde a la nota No.','number',1,null,0,'Escribe el número (folio) de la nota que contestas.',['tipo','Respuesta']],['texto','Descripción','textarea',1,null,1],['fotos','Fotos','photos',0,null,1]]},
+  bitacora:{t:'Nota de bitácora',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha y hora','datetime-local',1],['tipo','Tipo de nota','select',0,BIT_T],['respondeA','Responde a la nota No.','number',1,null,0,'Escribe el número (folio) de la nota que contestas.',['tipo','Respuesta']],['texto','Descripción','textarea',1,null,1],['fotos','Fotos (máximo 4)','photos',0,4,1]]},
   evidencias:{t:'Evidencia',f:[['obraId','Obra','obra',1,null,1],['concepto','Concepto o frente de trabajo','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['gps','Ubicación GPS','gps'],['fotos','Fotos','photos',1,null,1],['nota','Nota','textarea',0,null,1]]},
   documentos:{t:'Documento',f:[['obraId','Obra','obra',1,null,1],['tipo','Tipo','select',0,DOC_T],['fecha','Fecha','date'],['nombre','Nombre','text',1,null,1],['file','Archivo (PDF, imagen, Excel, Word)','file',0,null,1],['notas','Notas','textarea',0,null,1]]},
 };
-let photoBuf=[],fileBuf=null;
+let photoBuf=[],fileBuf=null,photoMax=0;
+const pvHtml=()=>photoBuf.map((p,i)=>`<span class="pv-it"><img src="${p}" alt="Foto ${i+1}"><button type="button" class="pv-x" data-pvdel="${i}" aria-label="Quitar foto ${i+1}">✕</button></span>`).join('');
 const asList=m=>Array.isArray(m.asistentes)?m.asistentes:String(m.asistentes||'').split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean).map(nombre=>({nombre,cargo:'',empresa:''}));
 const asRow=a=>`<div class="as-row"><input data-k="nombre" placeholder="Nombre" aria-label="Nombre" value="${esc(a.nombre)}"><input data-k="cargo" placeholder="Cargo" aria-label="Cargo" value="${esc(a.cargo)}"><input data-k="empresa" placeholder="Empresa o área" aria-label="Empresa o área" value="${esc(a.empresa)}"><button type="button" class="x" data-asdel="1" aria-label="Quitar asistente">${ic('trash')}</button></div>`;
 function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...obj};photoBuf=[...(o.fotos||[])];fileBuf=null;
@@ -937,13 +950,13 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
     else if(t==='textarea')inp=`<textarea id="${id}" name="${k}">${esc(v)}</textarea>`;
     else if(t==='money')inp=`<input id="${id}" name="${k}" inputmode="decimal" value="${v===''?'':esc(v)}" placeholder="0.00">`;
     else if(t==='number')inp=`<input id="${id}" name="${k}" type="number" step="any" value="${esc(v)}">`;
-    else if(t==='photos')inp=`<input id="${id}" type="file" accept="image/*" capture="environment" multiple data-photos="1"><div class="pv" id="pv">${photoBuf.map((p,i)=>`<img src="${p}" alt="Foto ${i+1}">`).join('')}</div><span class="hint">Puedes tomar la foto con la cámara o elegirla de la galería.</span>`;
+    else if(t==='photos'){photoMax=opts||0;inp=`<div class="row"><label class="btn sm ph-btn">${ic('camera')}Tomar foto<input type="file" accept="image/*" capture="environment" data-photos="1" hidden></label><label class="btn sm ph-btn">${ic('file')}Galería o archivos<input type="file" accept="image/*" multiple data-photos="1" hidden></label></div><div class="pv" id="pv">${pvHtml()}</div><span class="hint" id="pvH">${photoMax?`Hasta ${photoMax} fotos. `:''}Toca la ✕ para quitar una.</span>`}
     else if(t==='asist')inp=`<div id="asList" class="as-list">${(asList(o).length?asList(o):[{nombre:'',cargo:'',empresa:''}]).map(asRow).join('')}</div><button type="button" class="btn sm" data-asadd="1" style="align-self:flex-start">${ic('plus')}Agregar asistente</button>`;
     else if(t==='file')inp=`<input id="${id}" type="file" data-file="1"><span class="hint" id="fileH">${o.archivo?'Actual: '+esc(o.archivo)+'. Elige otro para reemplazarlo.':'Se guarda en este dispositivo y, si está activa la sincronización, en la nube.'}</span>`;
     else if(t==='gps')inp=`<div class="row" style="flex-wrap:nowrap"><input id="${id}" name="${k}" value="${esc(v)}" placeholder="lat, long" style="flex:1"><button type="button" class="btn sm" data-gps="${id}">${ic('pin')}GPS</button></div><span class="hint" id="${id}-h"></span>`;
     else inp=`<input id="${id}" name="${k}" type="${t}" value="${esc(v)}">`;
     return `<div class="fld ${full?'full':''}"${when?` data-when="${when[0]}=${esc(when[1])}"${String(o[when[0]]??'')===when[1]?'':' hidden'}`:''}>${lab}${inp}${hint||when?`<span class="hint" id="${id}-h">${hint||''}</span>`:''}</div>`};
-  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><form class="modal" id="frm" novalidate><div class="mh"><h2>${title||(o.id?'Editar ':'Nueva ')+F.t.toLowerCase()}</h2><button type="button" class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${F.f.map(fld).join('')}${extra}<div class="fld full"><span class="note" id="frmErr" style="color:var(--bad)"></span></div></div><div class="mf">${o.id?`<button type="button" class="btn danger" id="frmDel" style="margin-right:auto">${ic('trash')}Eliminar</button>`:''}<button type="button" class="btn" data-close="1">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><form class="modal" id="frm" novalidate><div class="mh"><h2>${title||(o.id?'Editar ':/^(Corte|Convenio|Documento|Pendiente)/.test(F.t)?'Nuevo ':'Nueva ')+F.t.toLowerCase()}</h2><button type="button" class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${F.f.map(fld).join('')}${extra}<div class="fld full"><span class="note" id="frmErr" style="color:var(--bad)"></span></div></div><div class="mf">${o.id?`<button type="button" class="btn danger" id="frmDel" style="margin-right:auto">${ic('trash')}Eliminar</button>`:''}<button type="button" class="btn" data-close="1">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
   const form=$('#frm');
   form.onsubmit=e=>{e.preventDefault();const out={...o};let miss=[];
     F.f.forEach(([k,l,t,req,,,,when])=>{if(when&&String(form.elements[when[0]]?.value)!==when[1]){delete out[k];return}if(t==='asist'){out.asistentes=[...form.querySelectorAll('.as-row')].map(r=>({nombre:r.querySelector('[data-k=nombre]').value.trim(),cargo:r.querySelector('[data-k=cargo]').value.trim(),empresa:r.querySelector('[data-k=empresa]').value.trim()})).filter(a=>a.nombre);return}if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
@@ -975,7 +988,7 @@ function saver(col,msg,after){return o=>{if(o===null){del(col,lastEdit);render()
   if(after)after(o);render();toast(msg)}}
 const nextFolio=oid=>Math.max(0,...S.bitacora.filter(b=>b.obraId===oid&&b.estado==='aprobada').map(b=>b.folio||0))+1;
 let lastEdit=null;
-function editRec(col,id){const x=byId(col,id);if(!x)return;if(!canEdit(col,x)){toast(col==='bitacora'?'Esta nota ya no se puede editar':'No tienes permiso para modificar esto');return}lastEdit=id;openForm(col,x,col==='obras'?(o=>{if(o===null){delObra(id);go('obras');toast('Obra eliminada');return}put('obras',o);render();toast('Guardado')}):saver(col,'Guardado'))}
+function editRec(col,id){const x=byId(col,id);if(!x)return;if(!canEdit(col,x)){toast(col==='bitacora'?'Esta nota ya no se puede editar':isExt()?'Solo puedes consultar esta información':'No tienes permiso para modificar esto');return}lastEdit=id;openForm(col,x,col==='obras'?(o=>{if(o===null){delObra(id);go('obras');toast('Obra eliminada');return}put('obras',o);render();toast('Guardado')}):saver(col,'Guardado'))}
 const ACT={
   newObra:()=>isAdmin()&&openForm('obras',{tipo:'Obra',estado:'ejecucion',anticipo:30,inicio:HOY()},o=>{o.id=uid();put('obras',o);go('obras',o.id);toast('Obra registrada')}),
   editObra:()=>editRec('obras',V.id),
@@ -1091,7 +1104,8 @@ document.addEventListener('click',e=>{const t=e.target;
   const ed=t.closest('[data-edit]');if(ed){const[c,id]=ed.dataset.edit.split(':');closeModal();editRec(c,id);return}
   const ob=t.closest('[data-obra]');if(ob){go('obras',ob.dataset.obra,ob.dataset.tab||'resumen');return}
   const tb=t.closest('[data-tab]');if(tb&&V.view==='obras'&&V.id){V.tab=tb.dataset.tab;render();return}
-  const a=t.closest('[data-act]');if(a){ACT[a.dataset.act]&&ACT[a.dataset.act]();return}
+  const pd=t.closest('[data-pvdel]');if(pd){photoBuf.splice(+pd.dataset.pvdel,1);$('#pv').innerHTML=pvHtml();return}
+  const a=t.closest('[data-act]');if(a){const k=a.dataset.act;if(ACT_COL[k]&&!canCreate(ACT_COL[k])){toast('Solo puedes consultar esta información');return}ACT[k]&&ACT[k]();return}
   const f=t.closest('[data-f]');if(f){V.f=f.dataset.f;render();return}
   const mi=t.closest('[data-minuta]');if(mi){showMinuta(byId('minutas',mi.dataset.minuta));return}
   const aa=t.closest('[data-addac]');if(aa){const m=byId('minutas',aa.dataset.addac);openForm('pendientes',{obraId:m.obraId,minutaId:m.id,origen:'acuerdo',prioridad:'media',estado:'pendiente',compromiso:addDays(HOY(),7)},saver('pendientes','Acuerdo agregado',()=>setTimeout(()=>showMinuta(m),0)),'Nuevo acuerdo');return}
@@ -1105,7 +1119,7 @@ document.addEventListener('click',e=>{const t=e.target;
 document.addEventListener('change',async ev=>{const t=ev.target;
   if(t.id==='obraFil'){V.obra=t.value;render();return}
   if(t.dataset.logoup&&t.files[0]){logoBuf=await logoToData(t.files[0]);if(logoBuf)$('#logoPv').innerHTML=`<img src="${logoBuf}" alt="Logo nuevo" style="max-height:56px;max-width:180px;background:#fff;padding:4px;border-radius:6px"><span class="note" style="margin-left:8px">Guarda para aplicarlo</span>`;return}
-  if(t.dataset.photos){for(const f of t.files){const p=await compress(f);if(p)photoBuf.push(p)}$('#pv').innerHTML=photoBuf.map(p=>`<img src="${p}" alt="">`).join('');t.value='';return}
+  if(t.dataset.photos){let extra=0;for(const f of t.files){if(photoMax&&photoBuf.length>=photoMax){extra++;continue}const p=await compress(f);if(p)photoBuf.push(p)}$('#pv').innerHTML=pvHtml();t.value='';if(extra)toast(`Máximo ${photoMax} fotos por nota; ${extra===1?'1 no se agregó':extra+' no se agregaron'}.`);return}
   if(t.dataset.file){fileBuf=t.files[0]||null;if(fileBuf){$('#fileH').textContent=fileBuf.name+' · '+(fileBuf.size/1048576).toFixed(1)+' MB';const n=$('#f-nombre');if(n&&!n.value)n.value=fileBuf.name.replace(/\.[^.]+$/,'')}return}
   if(t.id==='importFile'&&t.files[0]){try{const d=JSON.parse(await t.files[0].text());if(d.app!=='control-obras')throw 0;COLS.forEach(c=>{S[c]=Array.isArray(d[c])?d[c]:[];persist(c);S[c].forEach(x=>queue(c,x.id))});if(d.config){S.config={...S.config,...d.config};persist('config')}go('panel');toast('Respaldo cargado')}catch(e){toast('Ese archivo no es un respaldo de esta app')}t.value=''}
 });
