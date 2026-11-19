@@ -79,6 +79,15 @@ a{color:var(--accent)}
 .phead p{margin:4px 0 0;color:var(--muted);font-size:15px}
 .phead .date{color:var(--muted);font-size:13px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.phead>div{min-width:0;max-width:100%}
+.sel{min-width:0;text-overflow:ellipsis}
+@media (max-width:860px){
+  .phead .row{width:100%}
+  .phead .row .sel{flex:1 1 100%;width:100%}
+  /* iPhone y iPad hacen zoom si un campo tiene letra menor a 16px y no regresan */
+  input,select,textarea,.sel{font-size:16px!important}
+}
+@media (pointer:coarse){input,select,textarea{font-size:16px!important}}
 
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);min-width:0}
 .card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px 10px}
