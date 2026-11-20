@@ -577,6 +577,8 @@ const vigente=o=>num(o.monto)+convDe(o.id).reduce((a,c)=>a+num(c.monto),0);
 const finVig=o=>addDays(o.fin,convDe(o.id).reduce((a,c)=>a+num(c.dias),0));
 /* Coherencia de fechas de una estimación.
    errs: problemas que impiden guardar. fut: fechas posteriores a hoy, que se guardan pero piden aprobación. */
+function topeEst(o){const vig=vigente(o);const cat=S.conceptos.filter(c=>c.obraId===o.id&&!c.deleted&&cuentaC(c)).reduce((a,c)=>a+num(c.cantidad)*num(c.pu),0);const hayEx=S.conceptos.some(c=>c.obraId===o.id&&!c.deleted&&c.extra&&cuentaC(c));
+  return cat>vig?{tope:cat,base:hayEx?'catálogo original más extraordinarios autorizados':'catálogo original'}:{tope:vig,base:'monto vigente del contrato'}}
 function checkEst(e){const o=byId('obras',e.obraId)||{};const hoy=HOY();const ini=e.periodoIni,fin=e.periodoFin,pres=e.fechaPres,pago=e.fechaPago;const errs=[],fut=[];
   if(ini&&fin&&ini>fin)errs.push('El periodo inicia después de terminar: revisa "Periodo del" y "Periodo al".');
   if(o.inicio&&ini&&ini<o.inicio)errs.push(`El periodo no puede iniciar antes del inicio del contrato (${fD(o.inicio)}).`);
@@ -594,6 +596,9 @@ function checkEst(e){const o=byId('obras',e.obraId)||{};const hoy=HOY();const in
   const tp=esTipo(e),tl=ES_TIPO[tp].toLowerCase();const otras=S.estimaciones.filter(x=>x.obraId===e.obraId&&x.id!==e.id&&!x.deleted&&esTipo(x)===tp);
   if(otras.some(x=>num(x.numero)===num(e.numero)))errs.push(`Ya existe la estimación ${tl} ${e.numero} en esta obra.`);
   if(e.finiquito==='si'){const f=otras.find(x=>x.finiquito==='si'&&x.estado!=='devuelta');if(f)errs.push(`Ya hay una estimación finiquito ${tl} (No. ${f.numero}) en esta obra.`)}
+  /* La suma de todas las estimaciones no puede rebasar el monto del contrato (o el catálogo más extraordinarios autorizados) */
+  if(e.estado!=='devuelta'&&num(e.importe)>0){const T=topeEst(o);const acum=S.estimaciones.filter(x=>x.obraId===e.obraId&&x.id!==e.id&&!x.deleted&&cuentaEst(x)).reduce((a,x)=>a+num(x.importe),0);
+    if(acum+num(e.importe)>T.tope+0.005)errs.push(`Con esta estimación el acumulado sería ${money(acum+num(e.importe))} y rebasa el máximo de ${money(T.tope)} (${T.base}). Lo máximo que puedes estimar es ${money(Math.max(0,T.tope-acum))}.`)}
   for(const x of otras.filter(x=>x.estado!=='devuelta'&&x.periodoFin)){const xi=x.periodoIni||x.periodoFin;
     if(ini<=x.periodoFin&&fin>=xi){errs.push(`El periodo se empalma con la estimación ${tl} ${x.numero} (${fD(xi)} – ${fD(x.periodoFin)}).`);continue}
     if(num(x.numero)<num(e.numero)&&xi>fin)errs.push(`La estimación ${x.numero} es anterior pero su periodo es posterior (${fD(xi)}). Revisa el número o las fechas.`);
@@ -744,7 +749,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v33';
+const APP_VER='20-nov-2026 · v34';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 /* Cierra la sesión (sin borrar datos) y vuelve a la pantalla de acceso */
 function bloquear(msg){U=null;S.config.ses='';S.config.cloudU=null;persist('config');if(Sync.cli){try{Sync.cli.auth.signOut({scope:'local'})}catch(e){}if(Sync.ch){try{Sync.cli.removeChannel(Sync.ch)}catch(e){}Sync.ch=null}Sync.set('auth')}closeModal();V.view='panel';render();if(msg)setTimeout(()=>toast(msg),300)}
@@ -914,9 +919,9 @@ function ocHTML(x){const o=byId('obras',x.obraId)||{};const F=fmtImp();const ex=
   <h2>Documentos de soporte</h2><p class="pm-p">${docsDe(x.id).map(d=>esc(d.nombre||d.archivo||'')).join(', ')||'—'}</p>
   <table class="pm-t inf-fir"><tr><td><div class="inf-l"></div>Solicita<br><b>${esc(x.solicita||'')}</b></td><td><div class="inf-l"></div>Revisa<br>Supervisión</td><td><div class="inf-l"></div>Autoriza<br>Infraestructura</td></tr></table>
   <div class="pm-pie">Impreso el ${fDT(isoT(new Date()))} por ${esc(U?U.nombre:'')} · Formato de muestra</div></div>`}
-function seedCat(){if(!S.obras.some(o=>o.id==='o1'))return;const C=[['1 Preliminares','1.1 Trazo y limpieza','P-01','Trazo y nivelación del terreno con equipo topográfico, incluye referencias.','m2',45000,6.8,45000],['1 Preliminares','1.1 Trazo y limpieza','P-02','Señalamiento provisional de zona de trabajos en área de movimiento.','lote',1,185000,1],
-  ['2 Pavimentos','2.1 Demoliciones','PV-01','Fresado de carpeta asfáltica existente de 10 cm de espesor.','m2',42000,58.5,40100],['2 Pavimentos','2.1 Demoliciones','PV-02','Carga y retiro de material producto del fresado fuera del aeropuerto.','m3',4200,95,4450],['2 Pavimentos','2.2 Estructura de pavimento','PV-03','Base hidráulica compactada al 100% AASHTO modificada.','m3',6300,690,3500],['2 Pavimentos','2.2 Estructura de pavimento','PV-04','Carpeta asfáltica de 10 cm con asfalto modificado.','m2',42000,412,15000],
-  ['3 Señalamiento y balizamiento','3.1 Señalamiento horizontal','SE-01','Pintura de señalamiento horizontal en pista con microesfera.','m2',3800,165,0],['3 Señalamiento y balizamiento','3.2 Balizamiento','SE-02','Suministro e instalación de luz empotrada de eje de pista LED.','pza',120,28500,0]];
+function seedCat(){if(!S.obras.some(o=>o.id==='o1'))return;const C=[['1 Preliminares','1.1 Trazo y limpieza','P-01','Trazo y nivelación del terreno con equipo topográfico, incluye referencias.','m2',45000,20,45000],['1 Preliminares','1.1 Trazo y limpieza','P-02','Señalamiento provisional de zona de trabajos en área de movimiento.','lote',1,576040,1],
+  ['2 Pavimentos','2.1 Demoliciones','PV-01','Fresado de carpeta asfáltica existente de 10 cm de espesor.','m2',42000,174,40100],['2 Pavimentos','2.1 Demoliciones','PV-02','Carga y retiro de material producto del fresado fuera del aeropuerto.','m3',4200,283,4450],['2 Pavimentos','2.2 Estructura de pavimento','PV-03','Base hidráulica compactada al 100% AASHTO modificada.','m3',6300,2054,3500],['2 Pavimentos','2.2 Estructura de pavimento','PV-04','Carpeta asfáltica de 10 cm con asfalto modificado.','m2',42000,1226,15000],
+  ['3 Señalamiento y balizamiento','3.1 Señalamiento horizontal','SE-01','Pintura de señalamiento horizontal en pista con microesfera.','m2',3800,491,0],['3 Señalamiento y balizamiento','3.2 Balizamiento','SE-02','Suministro e instalación de luz empotrada de eje de pista LED.','pza',120,84828,0]];
   C.forEach(([pa,sp,cl,de,un,q,pu,ej],i)=>{S.conceptos.push({id:'c'+i,obraId:'o1',partida:pa,subpartida:sp,clave:cl,descripcion:de,unidad:un,cantidad:q,pu,extra:false,por:'Ejemplo',upd:new Date().toISOString()});
     if(ej){const a1=Math.round(ej*0.6*100)/100;S.avconc.push({id:'ac'+i+'a',obraId:'o1',conceptoId:'c'+i,fecha:addDays(HOY(),-20),cantidad:a1,nota:'Generador quincena anterior',por:'Supervisión Técnica Peninsular'},{id:'ac'+i+'b',obraId:'o1',conceptoId:'c'+i,fecha:addDays(HOY(),-5),cantidad:Math.round((ej-a1)*100)/100,nota:'Generador quincena actual',por:'Supervisión Técnica Peninsular'})}});
   S.conceptos.push({id:'cx1',obraId:'o1',partida:'Extraordinarios',subpartida:'OC-01 · Sustitución de base hidráulica en cabecera 30L',clave:'EXT-01',descripcion:'Sustitución de base hidráulica en cabecera 30L por material contaminado.',unidad:'m3',cantidad:850,pu:940,puSolicitado:985,extra:true,exEstado:'autorizado',justif:'Material de base con contaminación detectada en sondeos; ver convenio CM-01.',por:'Ejemplo'},
@@ -1547,7 +1552,9 @@ window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h
   await openDB();
   const has=await idbGet('obras');
   if(has===undefined){seed()}else{for(const c of COLS)S[c]=(await idbGet(c))||[];S.config={...S.config,...((await idbGet('config'))||{})};S.cola=(await idbGet('cola'))||[];S.sync={...S.sync,...((await idbGet('sync'))||{})}}
-  if(S.config.ejemplos&&!S.config.catSeed&&!S.conceptos.length&&S.obras.some(o=>o.id==='o1'&&o.ejemplo)){seedCat();S.config.catSeed=1;persist('config');persist('conceptos');persist('avconc')}
+  if(S.config.ejemplos&&!S.config.catSeed&&!S.conceptos.length&&S.obras.some(o=>o.id==='o1'&&o.ejemplo)){seedCat();S.config.catSeed=2;persist('config');persist('conceptos');persist('avconc')}
+  /* Catálogo de ejemplo anterior: sus precios no sumaban el monto del contrato; se ajustan */
+  if(S.config.catSeed===1){const PU={'P-01':20,'P-02':576040,'PV-01':174,'PV-02':283,'PV-03':2054,'PV-04':1226,'SE-01':491,'SE-02':84828};let ch=0;S.conceptos.forEach(c=>{if(c.obraId==='o1'&&c.por==='Ejemplo'&&PU[c.clave]!=null){c.pu=PU[c.clave];ch=1}});S.config.catSeed=2;persist('config');if(ch)persist('conceptos')}
   S.usuarios=(await idbGet('usuarios'))||[];if(!S.usuarios.length)seedUsers();await ensureCreds();
   /* Siempre se entra con usuario y contraseña: no se recuerda la sesión al abrir la app */
   U=null;S.config.ses='';S.config.cloudU=null;persist('config');try{localStorage.removeItem('co-auth')}catch(e){}
