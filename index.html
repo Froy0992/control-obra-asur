@@ -224,6 +224,18 @@ td.r,th.r{text-align:right}
 .err-box{background:color-mix(in srgb,var(--bad) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:8px;padding:10px 12px}
 .err-box .note{font-size:14px}
 .err-ov{z-index:80}
+.sc-off{--sc:#b8bec6}.sc-info{--sc:var(--info)}.sc-warn{--sc:#d9a400}.sc-near{--sc:#ea7a0b}.sc-ok{--sc:var(--ok)}.sc-bad{--sc:var(--bad)}
+.cbar{width:70px;height:8px;border-radius:9px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden;display:inline-block;vertical-align:middle}.cbar i{display:block;height:100%;background:var(--sc)}
+.cbar.sc-bad{border-color:var(--bad)}
+.cpct{font-variant-numeric:tabular-nums;font-weight:600;margin-left:6px;color:var(--sc)}.cpct.sc-off{color:var(--muted)}
+.cbc{white-space:nowrap}
+.ctbl .c-par td{background:var(--surface-2);border-top:2px solid var(--line)}
+.ctbl .c-sub td{font-weight:600;color:var(--ink2)}
+.ctbl .c-desc{white-space:normal;min-width:220px;max-width:380px}
+@media (max-width:600px){.ctbl .c-desc{min-width:120px}.ctbl td,.ctbl th{padding:8px 8px}.cbar{width:46px}}
+.ctbl tr.c-row:has(.cbar.sc-bad) td{background:color-mix(in srgb,var(--bad) 7%,transparent)}
+.c-leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted)}.c-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--sc);margin-right:5px;vertical-align:-1px}
+.c-big{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:flex-end;background:var(--surface-2);border-radius:10px;padding:12px 14px}.c-big small{display:block;color:var(--muted);font-size:12px}.c-big b{font-size:18px}
 .pm h3{font-size:12.5px;margin:12px 0 4px;color:#333}
 .pm .hi-res{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}
 .pm .hi-ch{font-size:10px;color:#555;margin-top:3px}
@@ -483,7 +495,7 @@ const AEROS=['Cancún','Cozumel','Mérida','Huatulco','Oaxaca','Tapachula','Vera
 const IVA=0.16;
 
 /* ---------- Almacenamiento local (IndexedDB) ---------- */
-const COLS=['obras','convenios','estimaciones','avances','pendientes','minutas','bitacora','evidencias','documentos','historial','ajustes'];
+const COLS=['obras','convenios','estimaciones','avances','conceptos','avconc','pendientes','minutas','bitacora','evidencias','documentos','historial','ajustes'];
 const S={config:{ejemplos:false,uid:'u2'},usuarios:[],cola:[],sync:{url:'',key:'',email:'',last:'',on:false}};
 COLS.forEach(c=>S[c]=[]);
 let db=null;
@@ -515,16 +527,16 @@ const isExt=()=>!!U&&(NIVEL_ROL[U.rol]||3)>1;
 // Contratista y supervisión ven su obra, avance y estimaciones; supervisión además carga avance y estimaciones
 const isContra=()=>isExt();
 const isSup=()=>!!U&&NIVEL_ROL[U.rol]===2;
-const SUP_CARGA=['avances','estimaciones'];
-const CONTRA_VE=['obras','bitacora','avances','estimaciones','convenios','pendientes','minutas','documentos'];
+const SUP_CARGA=['avances','estimaciones','conceptos','avconc'];
+const CONTRA_VE=['obras','bitacora','avances','estimaciones','convenios','pendientes','minutas','documentos','conceptos','avconc'];
 function visible(col,x){if(col==='ajustes'||isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isContra())return CONTRA_VE.includes(col);if(isExt())return col==='obras'||col==='bitacora';return true}
 const D=new Proxy({},{get:(_,col)=>(S[col]||[]).filter(x=>visible(col,x))});
 function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())return col==='bitacora'||(isSup()&&SUP_CARGA.includes(col));return col!=='obras'&&col!=='historial'}
-function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
-const COL_L={obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
-const refTxt=(col,o)=>col==='estimaciones'?'Estimación '+o.numero:col==='avances'?'Corte del '+fD(o.fecha):col==='bitacora'?(o.folio?'Nota '+o.folio:'Nota sin folio')+' · '+(o.tipo||''):col==='convenios'?'Convenio '+(o.numero||''):String(o.titulo||o.nombre||o.concepto||o.numero||'');
+function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='conceptos')return isSup()&&!!x.extra&&x.exEstado!=='autorizado';if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
+const COL_L={conceptos:'Concepto de catálogo',avconc:'Avance de concepto',obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
+const refTxt=(col,o)=>col==='conceptos'?(o.extra?'Extraordinario ':'Concepto ')+(o.clave||'')+' · '+String(o.descripcion||'').slice(0,60):col==='avconc'?'Avance de '+((byId('conceptos',o.conceptoId)||{}).clave||'concepto')+' del '+fD(o.fecha):col==='estimaciones'?'Estimación '+o.numero:col==='avances'?'Corte del '+fD(o.fecha):col==='bitacora'?(o.folio?'Nota '+o.folio:'Nota sin folio')+' · '+(o.tipo||''):col==='convenios'?'Convenio '+(o.numero||''):String(o.titulo||o.nombre||o.concepto||o.numero||'');
 const SKIP=['upd','por','porId','ruta','mime','size','ejemplo','aprobadoPor','fechaAprob','aprobKey','aprobEl','hechoEl'];
-function fLabel(col,k){const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);return f?f[1]:({estado:'Estado',folio:'Folio',motivo:'Motivo de rechazo',archivo:'Archivo',aprobFecha:'Aprobación de fechas',aprobMotivo:'Motivo de aprobación',aprobNota:'Motivo del rechazo de fechas',aprobPor:'Aprobación por',hechoPor:'Marcado como hecho por',revSupPor:'Visto bueno de supervisión',rechazoNota:'Motivo de regreso',rechazoPor:'Regresado por'}[k]||k)}
+function fLabel(col,k){const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);return f?f[1]:({estado:'Estado',folio:'Folio',motivo:'Motivo de rechazo',archivo:'Archivo',aprobFecha:'Aprobación de fechas',aprobMotivo:'Motivo de aprobación',aprobNota:'Motivo del rechazo de fechas',aprobPor:'Aprobación por',hechoPor:'Marcado como hecho por',exEstado:'Estado del extraordinario',exMotivo:'Motivo',exPor:'Autorizó/rechazó',justif:'Justificación',conceptoId:'Concepto',revSupPor:'Visto bueno de supervisión',rechazoNota:'Motivo de regreso',rechazoPor:'Regresado por'}[k]||k)}
 function fmtF(col,k,v){if(v==null||v==='')return '—';if(k==='asistentes')return asList({asistentes:v}).map(a=>a.nombre).join(', ')||'—';if(k==='aprobFecha'){const m=AP_EST[v];return m?m[0]:String(v)}if(k==='asignadoId')return userNom(v)||'—';if(k==='estado'||k==='prioridad'){const m={...OB_EST,...ES_EST,...PE_EST,...BIT_EST,...PRIO}[v];return m?m[0]:String(v)}const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);if(f&&f[2]==='money')return money(v);if(f&&f[2]==='date')return fD(v);if(f&&f[2]==='datetime-local')return fDT(v);if(f&&f[2]==='obra')return obraCorto(v);return fmtV(v)}
 function fmtV(v){if(v==null||v==='')return '—';if(Array.isArray(v))return v.length+' foto(s)';const t=String(v);return t.length>90?t.slice(0,90)+'…':t}
 function logH(col,o,accion,cambios){if(col==='historial')return;const oid=col==='obras'?o.id:o.obraId;if(!oid)return;const now=new Date().toISOString();const h={id:uid(),obraId:oid,fecha:now,upd:now,usuario:U?U.nombre:'—',rol:U?U.rol:'',accion,tipo:COL_L[col]||col,ref:refTxt(col,o),cambios:cambios||[]};h.por=h.usuario;S.historial.unshift(h);persist('historial');queue('historial',h.id)}
@@ -631,6 +643,7 @@ function seed(){
   const EV=[['o1',-1,'Tendido de carpeta, tramo 1+200',210],['o1',-3,'Fresado de franja de seguridad',200],['o2',-2,'Colado de losas en eje C',35],['o3',-2,'Demolición de plafón en sala',190]];
   EV.forEach(([o,d,c,h],i)=>{const f=fakePhoto(c,h);S.evidencias.push({id:'ev'+i,obraId:o,fecha:off(d,11),concepto:c,nota:'',gps:o==='o1'?'21.036500, -86.877000':'',fotos:f?[f]:[]})});
   [['o1','Contrato','Contrato de obra CUN-OP-012',-155],['o1','Convenio modificatorio','Convenio CM-01',-40],['o1','Fianza','Fianza de cumplimiento',-150],['o2','Programa de obra','Programa de obra autorizado',-110],['o3','Contrato','Contrato de obra CZM-OP-007',-62]].forEach(([o,t,n,d],i)=>S.documentos.push({id:'d'+i,obraId:o,tipo:t,nombre:n,fecha:off(d),archivo:'',mime:'',size:0,notas:'Registro de ejemplo sin archivo.'}));
+  seedCat();S.config.catSeed=1;
   const now=new Date().toISOString();COLS.forEach(c=>{S[c].forEach(x=>{x.upd=x.upd||now;x.por=x.por||'Ejemplo'});persist(c)});
   [['o1',-3,'Ing. Ricardo Pech','supervisor','modificó','Estimación','Estimación 5',[['Importe ejecutado (sin IVA)','$11,050,000.00','$11,238,500.00']]],['o1',-2,'Pavimentos del Sureste','contratista','creó','Nota de bitácora','Nota sin folio · Avance',[]],['o1',-1,'Froylan','coordinador','rechazó','Nota de bitácora','Nota sin folio · Avance',[['Estado','Cargada','Rechazada']]],['o1',-1,'Froylan','coordinador','puso en revisión','Nota de bitácora','Nota sin folio · Solicitud',[['Estado','Cargada','En revisión']]],['o2',-1,'Arq. Mariana Canché','supervisor','modificó','Pendiente','Visto bueno de diseño de mezcla MR-45',[['Estado','Pendiente','En proceso']]]].forEach(([o,d,u,r,a,t,ref,ch],i)=>{const f=new Date(Date.now()+d*864e5-i*36e5).toISOString();S.historial.push({id:'h'+i,obraId:o,fecha:f,upd:f,usuario:u,rol:r,accion:a,tipo:t,ref,cambios:ch,por:u})});persist('historial');
   S.config.ejemplos=true;persist('config');
@@ -683,23 +696,23 @@ drop policy if exists "crear" on registros;
 drop policy if exists "editar" on registros;
 create policy "leer" on registros for select to authenticated using (
   es_admin()
-  or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col in ('obras','bitacora','avances','estimaciones','convenios','pendientes','minutas','documentos'))
+  or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col in ('obras','bitacora','avances','estimaciones','convenios','pendientes','minutas','documentos','conceptos','avconc'))
   or col = 'ajustes');
 create policy "crear" on registros for insert to authenticated with check (
   es_admin()
   or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra()
       and (col = 'historial' or (col = 'bitacora' and data->>'estado' = 'cargada')))
-  or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and col in ('avances','estimaciones')));
+  or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and col in ('avances','estimaciones','conceptos','avconc')));
 create policy "editar" on registros for update to authenticated
   using (
     es_admin()
     or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada')
-    or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and col in ('avances','estimaciones'))
+    or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and col in ('avances','estimaciones','conceptos','avconc'))
     or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col = 'pendientes'))
   with check (
     es_admin()
     or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada')
-    or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and col in ('avances','estimaciones'))
+    or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and col in ('avances','estimaciones','conceptos','avconc'))
     or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col = 'pendientes'));
 
 -- Tu propio usuario como coordinador (cambia el correo y el nombre):
@@ -709,7 +722,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v22';
+const APP_VER='20-nov-2026 · v23';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -775,6 +788,63 @@ function apPen(id,acc,el){const x=byId('pendientes',id);if(!x||!canApPen(x))retu
   if(acc==='ok'){const fin=isAdmin();put('pendientes',{...x,estado:fin?'cerrada':'porAdm',...(fin?{aprobPor:U.nombre}:{revSupPor:U.nombre}),rechazoNota:''},fin?'aprobó':'dio visto bueno');back();toast(fin?'Aprobado: el pendiente queda cerrado':'Visto bueno dado: ahora lo aprueba Infraestructura (gerente o coordinador regional)');return}
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:480px"><div class="mh"><h2>Regresar pendiente</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr"><p style="margin:0"><b>${esc(x.titulo)}</b></p><div class="fld"><label for="penNota">¿Qué falta? (lo verá ${esc(x.hechoPor||'quien lo marcó')})</label><textarea id="penNota"></textarea></div><span class="note" id="penErr" style="color:var(--bad)"></span></div><div class="mf"><button class="btn" data-close="1">Cancelar</button><button class="btn danger" id="penNo">Regresar</button></div></div></div>`;
   $('#penNo').onclick=()=>{const n=$('#penNota').value.trim();if(!n){$('#penErr').textContent='Escribe qué falta.';return}put('pendientes',{...x,estado:'proceso',rechazoNota:n,rechazoPor:U.nombre},'regresó');closeModal();render();toast('Pendiente regresado a "En proceso"')}}
+/* ---------- Catálogo de conceptos y avance por concepto ---------- */
+const fmtN=v=>Number(num(v)).toLocaleString('es-MX',{maximumFractionDigits:3});
+const ejecDe=cid=>D.avconc.filter(a=>a.conceptoId===cid).reduce((t,a)=>t+num(a.cantidad),0);
+const pctOf=(e,c)=>c>0?e/c*100:(e>0?999:0);
+const SEM=p=>p>100.0001?['bad','Excedido']:p>=99.9999?['ok','Terminado']:p>=90?['near','Por terminar']:p>=70?['warn','Avanzado']:p>0?['info','En ejecución']:['off','Sin avance'];
+const semBar=p=>{const k=SEM(p);return `<div class="cbar sc-${k[0]}" title="${k[1]}"><i style="width:${clamp(p,0,100)}%"></i></div><span class="cpct sc-${k[0]}">${p>=999?'—':pct(p)}</span>`};
+const cuentaC=c=>!c.extra||c.exEstado==='autorizado';
+const EX_EST={revision:['Por autorizar','warn'],autorizado:['Autorizado','ok'],rechazado:['Rechazado','bad']};
+const natCmp=(a,b)=>String(a||'').localeCompare(String(b||''),'es',{numeric:true});
+function catRows(list,canEx){const by=new Map();list.sort((a,b)=>natCmp(a.partida,b.partida)||natCmp(a.subpartida,b.subpartida)||natCmp(a.clave,b.clave)).forEach(c=>{const pk=c.partida||'Sin partida';if(!by.has(pk))by.set(pk,new Map());const sm=by.get(pk);const sk=c.subpartida||'';if(!sm.has(sk))sm.set(sk,[]);sm.get(sk).push(c)});
+  const agg=arr=>{let pr=0,ej=0;arr.forEach(c=>{pr+=num(c.cantidad)*num(c.pu);ej+=ejecDe(c.id)*num(c.pu)});return{pr,ej,p:pr>0?ej/pr*100:0}};
+  const f=V.f;const pass=c=>{const p=pctOf(ejecDe(c.id),num(c.cantidad));return !f||(f==='near'?p>=90&&p<=100.0001&&p<99.9999:f==='bad'?p>100.0001:f==='ok'?p>=99.9999&&p<=100.0001:f==='off'?p===0:true)};
+  let h='';for(const[pk,sm]of by){const all=[...sm.values()].flat();const vis=all.filter(pass);if(!vis.length)continue;const a=agg(all);
+    h+=`<tr class="c-par"><td colspan="2"><b>${esc(pk)}</b></td><td class="cbc">${semBar(a.p)}</td><td colspan="4"></td><td class="r num"><b>${money(a.pr)}</b></td><td class="r num"><b>${money(a.ej)}</b></td></tr>`;
+    for(const[sk,arr]of sm){const v2=arr.filter(pass);if(!v2.length)continue;if(sk){const b=agg(arr);h+=`<tr class="c-sub"><td></td><td>${esc(sk)}</td><td class="cbc">${semBar(b.p)}</td><td colspan="4"></td><td class="r num">${money(b.pr)}</td><td class="r num">${money(b.ej)}</td></tr>`}
+      h+=v2.map(c=>{const e=ejecDe(c.id),q=num(c.cantidad),p=pctOf(e,q);return `<tr class="click c-row" data-conc="${c.id}"><td class="num"><b>${esc(c.clave||'')}</b></td><td class="c-desc">${esc(c.descripcion||'')}${c.extra?` ${pill(EX_EST,c.exEstado||'revision')}`:''}</td><td class="cbc">${semBar(p)}</td><td>${esc(c.unidad||'')}</td><td class="r num">${fmtN(q)}</td><td class="r num">${fmtN(e)}</td><td class="r num">${money(num(c.pu))}</td><td class="r num">${money(q*num(c.pu))}</td><td class="r num">${money(e*num(c.pu))}</td></tr>`}).join('')}}
+  return h}
+function catTab(o){const cs=ofObra('conceptos',o.id);const base=cs.filter(c=>!c.extra),ex=cs.filter(c=>c.extra);
+  const tot=arr=>arr.reduce((t,c)=>t+num(c.cantidad)*num(c.pu),0),totE=arr=>arr.reduce((t,c)=>t+ejecDe(c.id)*num(c.pu),0);
+  const exA=ex.filter(cuentaC);const pr=tot(base)+tot(exA),ej=totE(base)+totE(exA);
+  const nEx=cs.filter(c=>cuentaC(c)&&pctOf(ejecDe(c.id),num(c.cantidad))>100.0001).length,nNear=cs.filter(c=>{const p=pctOf(ejecDe(c.id),num(c.cantidad));return cuentaC(c)&&p>=90&&p<99.9999}).length;
+  const head=`<thead><tr><th>Clave</th><th>Descripción</th><th>Avance</th><th>Unidad</th><th class="r">Cant. proyecto</th><th class="r">Ejecutado</th><th class="r">P.U.</th><th class="r">Importe</th><th class="r">Importe ejecutado</th></tr></thead>`;
+  const sum=`<div class="sumgrid"><div><small>Catálogo original</small><b>${mShort(tot(base))}</b></div><div><small>Extraordinarios autorizados</small><b>${mShort(tot(exA))}</b></div><div><small>Ejecutado</small><b>${mShort(ej)}</b> <span class="note">${pct(pr?ej/pr*100:0)}</span></div><div><small>Conceptos</small><b>${cs.length}</b> <span class="note">${nNear} por terminar · ${nEx} excedidos</span></div></div>`;
+  const leg=`<div class="c-leg">${[['off','Sin avance'],['info','En ejecución'],['warn','70% o más'],['near','90% o más'],['ok','Terminado'],['bad','Excedido']].map(([k,l])=>`<span><i class="sc-${k}"></i>${l}</span>`).join('')}</div>`;
+  const rows=catRows(base.slice());
+  const exRows=ex.slice().sort((a,b)=>natCmp(a.clave,b.clave)).map(c=>{const e=ejecDe(c.id),q=num(c.cantidad),p=pctOf(e,q);return `<tr class="click c-row" data-conc="${c.id}"><td class="num"><b>${esc(c.clave||'')}</b></td><td class="c-desc">${esc(c.descripcion||'')}<div class="sub">${esc(c.partida||'')}${c.subpartida?' · '+esc(c.subpartida):''}</div></td><td>${pill(EX_EST,c.exEstado||'revision')}${isAdmin()&&(c.exEstado||'revision')==='revision'?`<div class="row" style="margin-top:6px;flex-wrap:nowrap"><button class="btn sm" data-exap="${c.id}" data-acc="no">Rechazar</button><button class="btn sm pri" data-exap="${c.id}" data-acc="ok">Autorizar</button></div>`:''}</td><td class="cbc">${cuentaC(c)?semBar(p):'<span class="note">—</span>'}</td><td>${esc(c.unidad||'')}</td><td class="r num">${fmtN(q)}</td><td class="r num">${money(num(c.pu))}</td><td class="r num">${money(q*num(c.pu))}</td><td class="r num">${money(e*num(c.pu))}</td></tr>`}).join('');
+  return `<div class="card"><div class="card-b" style="padding-top:18px">${sum}</div></div>
+  <div class="card"><div class="card-h"><h2>Catálogo de conceptos</h2><div class="row">${isAdmin()?`<button class="btn sm" data-act="newConc">${ic('plus')}Concepto</button>`:''}</div></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px">${chips([['','Todos'],['near','Por terminar'],['bad','Excedidos'],['ok','Terminados'],['off','Sin avance']])}${leg}
+    ${base.length?(rows?`<div class="tbl-wrap"><table class="ctbl">${head}<tbody>${rows}</tbody></table></div>`:empty('Ningún concepto con ese filtro.')):empty(isAdmin()?'Aún no hay catálogo. Agrega los conceptos por partida y subpartida.':'Aún no se ha cargado el catálogo de esta obra.',isAdmin()?'newConc':'',isAdmin()?'Agregar concepto':'')}
+    <p class="note" style="margin:0">Toca un concepto para ver su historial o registrar avance. El porcentaje de partidas y subpartidas se calcula por importe.</p></div></div>
+  <div class="card"><div class="card-h"><h2>Precios extraordinarios</h2>${canCreate('conceptos')?`<button class="btn sm" data-act="newExt">${ic('plus')}Precio extraordinario</button>`:''}</div><div class="card-b">${ex.length?`<div class="tbl-wrap"><table class="ctbl"><thead><tr><th>Clave</th><th>Descripción</th><th>Estado</th><th>Avance</th><th>Unidad</th><th class="r">Cantidad</th><th class="r">P.U.</th><th class="r">Importe</th><th class="r">Importe ejecutado</th></tr></thead><tbody>${exRows}</tbody></table></div>`:'<div class="empty">Sin precios extraordinarios.</div>'}<p class="note" style="margin:8px 0 0">Supervisión puede proponerlos; los autoriza Infraestructura. Solo los autorizados cuentan en los totales y pueden recibir avance.</p></div></div>`}
+function showConc(c){if(!c)return;const e=ejecDe(c.id),q=num(c.cantidad),p=pctOf(e,q);const hs=D.avconc.filter(a=>a.conceptoId===c.id).sort((a,b)=>a.fecha<b.fecha?-1:1);let acc=0;
+  const puede=canCreate('avconc')&&cuentaC(c);
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:760px"><div class="mh"><h2>${esc(c.clave||'')} · ${c.extra?'Precio extraordinario':'Concepto'}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr">
+    <p style="margin:0;white-space:pre-wrap">${esc(c.descripcion||'')}</p>
+    <div class="kv"><div>Partida</div><div>${esc(c.partida||'—')}</div><div>Subpartida</div><div>${esc(c.subpartida||'—')}</div><div>Unidad</div><div>${esc(c.unidad||'')}</div><div>Cantidad de proyecto</div><div class="num">${fmtN(q)}</div><div>Precio unitario</div><div class="num">${money(num(c.pu))}</div><div>Importe</div><div class="num">${money(q*num(c.pu))}</div>${c.extra?`<div>Estado</div><div>${pill(EX_EST,c.exEstado||'revision')}${c.exMotivo?' '+esc(c.exMotivo):''}</div><div>Justificación</div><div style="white-space:pre-wrap">${esc(c.justif||'—')}</div>`:''}</div>
+    <div class="c-big"><div><small>Ejecutado</small><b class="num">${fmtN(e)} ${esc(c.unidad||'')}</b></div><div><small>Restante</small><b class="num">${fmtN(q-e)}</b></div><div style="flex:1;min-width:160px"><small>${SEM(p)[1]}</small><div style="display:flex;align-items:center;gap:8px">${semBar(p)}</div></div></div>
+    <h3 style="font-size:17px;margin:4px 0 0">Registros de avance</h3>${hs.length?`<div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th class="r">Cantidad</th><th class="r">Acumulado</th><th class="r">%</th><th>Nota</th><th>Capturó</th></tr></thead><tbody>${hs.map(a=>{acc+=num(a.cantidad);const pp=pctOf(acc,q);return `<tr class="${canEdit('avconc',a)?'click':''}" ${canEdit('avconc',a)?`data-avc="${a.id}"`:''}><td class="num">${fD(a.fecha)}</td><td class="r num">${fmtN(a.cantidad)}</td><td class="r num">${fmtN(acc)}</td><td class="r num"><span class="cpct sc-${SEM(pp)[0]}">${pct(pp)}</span></td><td style="white-space:normal">${esc(a.nota||'')}</td><td>${esc(a.por||'')}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Sin registros de avance.</div>'}
+    ${c.extra&&!cuentaC(c)?'<p class="note" style="margin:0">Este precio extraordinario aún no está autorizado; no puede recibir avance.</p>':''}
+  </div><div class="mf">${canEdit('conceptos',c)?`<button class="btn" data-editconc="${c.id}" style="margin-right:auto">${ic('edit')}Editar</button>`:''}${puede?`<button class="btn pri" data-avconc="${c.id}">${ic('plus')}Registrar avance</button>`:''}</div></div></div>`}
+function formConc(c,extra){const o0=c||{obraId:curObra(),extra:!!extra,exEstado:extra?(isAdmin()?'autorizado':'revision'):undefined};
+  openForm(o0.extra?'conceptosX':'conceptos',o0,saver('conceptos',o0.extra?(isAdmin()&&!c?'Precio extraordinario agregado y autorizado':'Precio extraordinario guardado; queda por autorizar'):'Concepto guardado'),c?(o0.extra?'Editar precio extraordinario':'Editar concepto'):(o0.extra?'Nuevo precio extraordinario':'Nuevo concepto'))}
+function formAvC(c,a){const e=ejecDe(c.id)-(a?num(a.cantidad):0);
+  openForm('avconc',a||{obraId:c.obraId,conceptoId:c.id,fecha:HOY()},o=>{saver('avconc','Avance registrado')(o);if(o){const cc=byId('conceptos',c.id);if(cc)setTimeout(()=>showConc(cc),50)}},`Avance · ${c.clave}`,`<div class="fld full"><span class="note">${esc(String(c.descripcion||'').slice(0,140))}<br>Proyecto: <b>${fmtN(c.cantidad)} ${esc(c.unidad||'')}</b> · Ejecutado: <b>${fmtN(e)}</b> · Restante: <b>${fmtN(num(c.cantidad)-e)}</b></span></div>`)}
+function exAp(id,acc){const x=byId('conceptos',id);if(!x||!isAdmin())return;
+  if(acc==='ok'){put('conceptos',{...x,exEstado:'autorizado',exPor:U.nombre,exMotivo:''},'autorizó');render();toast('Precio extraordinario autorizado');return}
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:480px"><div class="mh"><h2>Rechazar ${esc(x.clave||'')}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr"><div class="fld"><label for="exNota">Motivo</label><textarea id="exNota"></textarea></div><span class="note" id="exErr" style="color:var(--bad)"></span></div><div class="mf"><button class="btn" data-close="1">Cancelar</button><button class="btn danger" id="exNo">Rechazar</button></div></div></div>`;
+  $('#exNo').onclick=()=>{const n=$('#exNota').value.trim();if(!n){$('#exErr').textContent='Escribe el motivo.';return}put('conceptos',{...x,exEstado:'rechazado',exPor:U.nombre,exMotivo:n},'rechazó');closeModal();render();toast('Precio extraordinario rechazado')}}
+function seedCat(){if(!S.obras.some(o=>o.id==='o1'))return;const C=[['1 Preliminares','1.1 Trazo y limpieza','P-01','Trazo y nivelación del terreno con equipo topográfico, incluye referencias.','m2',45000,6.8,45000],['1 Preliminares','1.1 Trazo y limpieza','P-02','Señalamiento provisional de zona de trabajos en área de movimiento.','lote',1,185000,1],
+  ['2 Pavimentos','2.1 Demoliciones','PV-01','Fresado de carpeta asfáltica existente de 10 cm de espesor.','m2',42000,58.5,40100],['2 Pavimentos','2.1 Demoliciones','PV-02','Carga y retiro de material producto del fresado fuera del aeropuerto.','m3',4200,95,4450],['2 Pavimentos','2.2 Estructura de pavimento','PV-03','Base hidráulica compactada al 100% AASHTO modificada.','m3',6300,690,3500],['2 Pavimentos','2.2 Estructura de pavimento','PV-04','Carpeta asfáltica de 10 cm con asfalto modificado.','m2',42000,412,15000],
+  ['3 Señalamiento y balizamiento','3.1 Señalamiento horizontal','SE-01','Pintura de señalamiento horizontal en pista con microesfera.','m2',3800,165,0],['3 Señalamiento y balizamiento','3.2 Balizamiento','SE-02','Suministro e instalación de luz empotrada de eje de pista LED.','pza',120,28500,0]];
+  C.forEach(([pa,sp,cl,de,un,q,pu,ej],i)=>{S.conceptos.push({id:'c'+i,obraId:'o1',partida:pa,subpartida:sp,clave:cl,descripcion:de,unidad:un,cantidad:q,pu,extra:false,por:'Ejemplo',upd:new Date().toISOString()});
+    if(ej){const a1=Math.round(ej*0.6*100)/100;S.avconc.push({id:'ac'+i+'a',obraId:'o1',conceptoId:'c'+i,fecha:addDays(HOY(),-20),cantidad:a1,nota:'Generador quincena anterior',por:'Supervisión Técnica Peninsular'},{id:'ac'+i+'b',obraId:'o1',conceptoId:'c'+i,fecha:addDays(HOY(),-5),cantidad:Math.round((ej-a1)*100)/100,nota:'Generador quincena actual',por:'Supervisión Técnica Peninsular'})}});
+  S.conceptos.push({id:'cx1',obraId:'o1',partida:'2 Pavimentos',subpartida:'2.2 Estructura de pavimento',clave:'EXT-01',descripcion:'Sustitución de base hidráulica en cabecera 30L por material contaminado.',unidad:'m3',cantidad:850,pu:940,extra:true,exEstado:'autorizado',justif:'Material de base con contaminación detectada en sondeos; ver convenio CM-01.',por:'Ejemplo'},
+    {id:'cx2',obraId:'o1',partida:'2 Pavimentos',subpartida:'2.1 Demoliciones',clave:'EXT-02',descripcion:'Sellado de grietas con asfalto modificado en zonas fuera de proyecto.',unidad:'ml',cantidad:2600,pu:74,extra:true,exEstado:'revision',justif:'Grietas en márgenes de pista no incluidas en catálogo.',por:'Supervisión Técnica Peninsular'});
+  S.avconc.push({id:'acx1',obraId:'o1',conceptoId:'cx1',fecha:addDays(HOY(),-8),cantidad:300,nota:'Frente cabecera 30L',por:'Supervisión Técnica Peninsular'});
+  S.avconc.forEach(a=>a.upd=a.upd||new Date().toISOString())}
 const porAprobar=()=>D.bitacora.filter(b=>b.estado==='cargada'||b.estado==='revision');
 const V={view:'panel',id:null,tab:'resumen',obra:'',f:'',q:''};
 function go(view,id=null,tab='resumen'){V.view=view;V.id=id;V.tab=tab;V.f='';try{if(location.hash.slice(1)!==view)history.replaceState(null,'','#'+view)}catch(e){}render();window.scrollTo(0,0)}
@@ -784,10 +854,11 @@ function navHtml(){const N=navFor(),B=bnavFor();const pa=isAdmin()?porAprobar().
   $('#bnav').innerHTML=B.map(([k,l,i])=>`<button data-go="${k}" ${(V.view===k||(k==='mas'&&!B.some(b=>b[0]===V.view)))?'aria-current="page"':''}>${ic(i)}${l}</button>`).join('');
   $('#uName').textContent=U?U.nombre:'Sin sesión';$('#uRol').textContent=U?(ROLES[U.rol]||U.rol)+' · '+grupoDe(U.rol):'Inicia sesión';$('#uAv').textContent=initials(U?U.nombre:'?');$('#mTitle').textContent=(NAV_ALL.find(n=>n[0]===V.view)||['','Buscar'])[1]}
 const FAB={obras:'newObra',estimaciones:'newEst',pendientes:'newPen',minutas:'newMin',bitacora:'newBit',evidencias:'newEv',documentos:'newDoc'};
-const FAB_COL={newObra:'obras',newEst:'estimaciones',newPen:'pendientes',newMin:'minutas',newBit:'bitacora',newEv:'evidencias',newDoc:'documentos',newAv:'avances'};
+const TAB_FAB={estimaciones:'newEst',avance:'newAv',catalogo:'newConc',pendientes:'newPen',minutas:'newMin',bitacora:'newBit',evidencias:'newEv',documentos:'newDoc'};
+const FAB_COL={newConc:'catalogoBase',newExt:'conceptos',newObra:'obras',newEst:'estimaciones',newPen:'pendientes',newMin:'minutas',newBit:'bitacora',newEv:'evidencias',newDoc:'documentos',newAv:'avances'};
 function render(){const N=navFor();if(V.view!=='buscar'&&!N.some(n=>n[0]===V.view)){V.view=N[0][0];V.id=null}
   document.body.classList.toggle('locked',!U||!!(U.cambiar&&!(S.sync.on&&S.sync.url)));navHtml();const f=!U?VIEWS.login:(U.cambiar&&!(S.sync.on&&S.sync.url))?VIEWS.cambiaPw:(VIEWS[V.view]||VIEWS.panel);$('#view').innerHTML=f();
-  const fm=V.view==='obras'&&V.id?'newEv':FAB[V.view];$('#fab').hidden=!U||!fm||(V.view==='obras'&&!V.id&&!isAdmin())||!canCreate(FAB_COL[fm]);bindCharts()}
+  const fm=V.view==='obras'&&V.id?(TAB_FAB[V.tab]||'newEv'):FAB[V.view];$('#fab').hidden=!U||!fm||(V.view==='obras'&&!V.id&&!isAdmin())||!canCreate(FAB_COL[fm]);bindCharts()}
 
 /* ---------- Piezas de interfaz ---------- */
 const ACT_COL={...FAB_COL,newConv:'convenios'};
@@ -980,9 +1051,9 @@ config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfi
   </div></div>`:''}`}
 };
 
-function obraDetail(o){if(!o)return empty('Esta obra ya no existe.');const r=resumen(o);const tabs=isExt()?[['resumen','Resumen'],['estimaciones','Estimaciones'],['avance','Avance'],['pendientes','Pendientes'],['minutas','Minutas'],['bitacora','Bitácora'],['documentos','Documentos']]:[['resumen','Resumen'],['estimaciones','Estimaciones'],['avance','Avance'],['pendientes','Pendientes'],['minutas','Minutas'],['bitacora','Bitácora'],['evidencias','Evidencias'],['documentos','Documentos'],...(isAdmin()?[['historial','Historial']]:[])];if(!tabs.some(t=>t[0]===V.tab))V.tab='resumen';
-  const cnt={estimaciones:ofObra('estimaciones',o.id).length,pendientes:abiertos(o.id).length,minutas:ofObra('minutas',o.id).length,bitacora:ofObra('bitacora',o.id).length,evidencias:ofObra('evidencias',o.id).length,documentos:ofObra('documentos',o.id).length};
-  const add0={estimaciones:['newEst','Registrar estimación'],avance:['newAv','Registrar corte de avance'],pendientes:['newPen','Nuevo pendiente'],minutas:['newMin','Nueva minuta'],bitacora:['newBit','Nueva nota'],evidencias:['newEv','Subir evidencia'],documentos:['newDoc','Subir documento']}[V.tab];const add=add0&&canCreate(FAB_COL[add0[0]])?add0:null;
+function obraDetail(o){if(!o)return empty('Esta obra ya no existe.');const r=resumen(o);const tabs=isExt()?[['resumen','Resumen'],['estimaciones','Estimaciones'],['avance','Avance'],['catalogo','Catálogo'],['pendientes','Pendientes'],['minutas','Minutas'],['bitacora','Bitácora'],['documentos','Documentos']]:[['resumen','Resumen'],['estimaciones','Estimaciones'],['avance','Avance'],['catalogo','Catálogo'],['pendientes','Pendientes'],['minutas','Minutas'],['bitacora','Bitácora'],['evidencias','Evidencias'],['documentos','Documentos'],...(isAdmin()?[['historial','Historial']]:[])];if(!tabs.some(t=>t[0]===V.tab))V.tab='resumen';
+  const cnt={catalogo:ofObra('conceptos',o.id).length,estimaciones:ofObra('estimaciones',o.id).length,pendientes:abiertos(o.id).length,minutas:ofObra('minutas',o.id).length,bitacora:ofObra('bitacora',o.id).length,evidencias:ofObra('evidencias',o.id).length,documentos:ofObra('documentos',o.id).length};
+  const add0={catalogo:['newConc','Agregar concepto'],estimaciones:['newEst','Registrar estimación'],avance:['newAv','Registrar corte de avance'],pendientes:['newPen','Nuevo pendiente'],minutas:['newMin','Nueva minuta'],bitacora:['newBit','Nueva nota'],evidencias:['newEv','Subir evidencia'],documentos:['newDoc','Subir documento']}[V.tab];const add=add0&&canCreate(FAB_COL[add0[0]])?add0:null;
   let body='';
   if(V.tab==='resumen'){const fv=finVig(o);const tot=dayDiff(o.inicio,fv),tr=clamp(dayDiff(o.inicio,HOY()),0,tot);const cv=convDe(o.id);
     body=`<div class="detail">
@@ -998,6 +1069,7 @@ function obraDetail(o){if(!o)return empty('Esta obra ya no existe.');const r=res
       <div class="card"><div class="card-h"><h2>Bitácora reciente</h2><button class="link" data-tab="bitacora">Ver bitácora</button></div><div class="card-b">${bitList([...ofObra('bitacora',o.id)].sort((a,b)=>a.fecha<b.fecha?1:-1).slice(0,3),false)}</div></div></div>`}
   else if(V.tab==='estimaciones')body=`<div class="card"><div class="card-b" style="padding-top:18px">${sumGrid(r)}</div></div><div class="card"><div class="card-b" style="padding-top:12px">${estTable(ofObra('estimaciones',o.id),false)}</div></div>`;
   else if(V.tab==='avance'){const cs=cortesDe(o.id);body=`<div class="card"><div class="card-h"><h2>Curva de avance</h2>${desvPill(r)}</div><div class="card-b">${sCurve(o)}</div></div><div class="card"><div class="card-h"><h2>Cortes</h2></div><div class="card-b">${cs.length?`<div class="tbl-wrap"><table><thead><tr><th>Quincena</th><th>Fecha</th><th class="r">Programado</th><th class="r">Real</th><th class="r">Desviación</th><th>Nota</th></tr></thead><tbody>${[...cs].reverse().map(c=>{const d=num(c.real)-num(c.programado);return `<tr class="click" data-edit="avances:${c.id}"><td>${qLbl(c.fecha)}</td><td class="num">${fD(c.fecha)}</td><td class="r num">${pct(c.programado)}</td><td class="r num"><b>${pct(c.real)}</b></td><td class="r num" style="color:${d<-3?'var(--bad)':'var(--ok)'}">${d>0?'+':''}${pct(d)}</td><td style="white-space:normal">${esc(c.nota||'')}</td></tr>`}).join('')}</tbody></table></div>`:empty('Sin cortes de avance.','newAv','Registrar corte')}</div></div>`}
+  else if(V.tab==='catalogo')body=catTab(o);
   else if(V.tab==='pendientes')body=`<div class="card"><div class="card-b" style="padding-top:8px">${penList(sortPen(ofObra('pendientes',o.id)),false)}</div></div>`;
   else if(V.tab==='minutas')body=`<div class="card"><div class="card-b" style="padding-top:8px">${minList(ofObra('minutas',o.id),false)}</div></div>`;
   else if(V.tab==='bitacora')body=`<div class="card"><div class="card-b" style="padding-top:8px">${bitList(ofObra('bitacora',o.id),false)}</div></div>`;
@@ -1009,11 +1081,18 @@ function obraDetail(o){if(!o)return empty('Esta obra ya no existe.');const r=res
   <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-tab="${k}" aria-selected="${V.tab===k}">${l}${cnt[k]?` <span class="note">${cnt[k]}</span>`:''}</button>`).join('')}</div>${body}`}
 
 /* ---------- Formularios ---------- */
+const UNIDADES=['m','m2','m3','ml','km','pza','kg','ton','lote','jgo','lt','hr','día','mes','sal'];
+const partidasDe=o=>[...new Set(S.conceptos.filter(c=>c.obraId===o.obraId&&!c.deleted).map(c=>c.partida).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));
+const subsDe=o=>[...new Set(S.conceptos.filter(c=>c.obraId===o.obraId&&!c.deleted).map(c=>c.subpartida).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));
+const CONC_F=[['obraId','Obra','obra',1,null,1],['partida','Partida','list',1,partidasDe,0,'Ej. 2 Pavimentos. Escribe una nueva o elige una existente.'],['subpartida','Subpartida','list',0,subsDe,0,'Opcional. Ej. 2.1 Demoliciones.'],['clave','Clave del concepto','text',1],['unidad','Unidad','list',1,UNIDADES],['descripcion','Descripción','textarea',1,null,1],['cantidad','Cantidad de proyecto','number',1],['pu','Precio unitario (sin IVA)','money',1]];
 const obraOpts=()=>D.obras.map(o=>[o.id,(o.aeropuerto?o.aeropuerto+' · ':'')+o.nombre]);
 const FORMS={
   obras:{t:'Obra',f:[['numero','No. de contrato','text',1],['tipo','Tipo','select',0,['Obra','Supervisión','Proyecto ejecutivo','Servicios']],['nombre','Nombre de la obra','text',1,null,1],['aeropuerto','Aeropuerto','list',0,AEROS],['estado','Estado','select',0,Object.entries(OB_EST).map(([k,v])=>[k,v[0]])],['contratista','Contratista','text'],['supervision','Supervisión externa','text'],['residente','Residente de obra','text'],['monto','Monto del contrato (sin IVA)','money',1],['anticipo','Anticipo (%)','number'],['inicio','Fecha de inicio','date',1],['fin','Fecha de término','date',1],['notas','Notas','textarea',0,null,1]]},
   convenios:{t:'Convenio modificatorio',f:[['obraId','Obra','obra',1,null,1],['numero','Número','text',1],['fecha','Fecha','date',1],['tipo','Tipo','select',0,['Monto','Plazo','Monto y plazo','Reducción']],['monto','Monto (sin IVA, negativo si reduce)','money'],['dias','Días de ampliación','number'],['descripcion','Motivo','textarea',0,null,1]]},
   estimaciones:{t:'Estimación',f:[['obraId','Obra','obra',1,null,1],['numero','No. de estimación','number',1],['estado','Estado','select',0,Object.entries(ES_EST).map(([k,v])=>[k,v[0]])],['periodoIni','Periodo del','date',1],['periodoFin','Periodo al','date',1],['importe','Importe ejecutado (sin IVA)','money',1],['amort','Amortización de anticipo','money',0,null,0,'Vacío = se calcula con el % de anticipo'],['retenciones','Retenciones','money'],['penas','Penas convencionales','money'],['fechaPres','Fecha de presentación','date'],['fechaPago','Fecha de pago','date'],['notas','Observaciones','textarea',0,null,1]]},
+  conceptos:{t:'Concepto',f:CONC_F},
+  conceptosX:{t:'Precio extraordinario',f:[...CONC_F,['justif','Justificación','textarea',1,null,1]]},
+  avconc:{t:'Avance de concepto',f:[['fecha','Fecha','date',1],['cantidad','Cantidad ejecutada en este registro','number',1,null,0,'Puede ser negativa para corregir.'],['nota','Nota (estimación, generador, frente de trabajo…)','textarea',0,null,1]]},
   avances:{t:'Corte de avance',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha de corte','date',1,null,0,'Hasta dos cortes por quincena (por ejemplo, a medio periodo y al día 15 o fin de mes).'],['programado','Avance programado acumulado (%)','number',1],['real','Avance físico real acumulado (%)','number',1],['nota','Nota','textarea',0,null,1]]},
   pendientes:{t:'Pendiente',f:[['obraId','Obra','obra',1,null,1],['titulo','Actividad o acuerdo','text',1,null,1],['asignadoId','Asignado a (usuario que lo marcará como hecho)','user',0,null,1],['responsable','Responsable externo (si no tiene usuario)','text'],['compromiso','Fecha compromiso','date'],['prioridad','Prioridad','select',0,Object.entries(PRIO).map(([k,v])=>[k,v[0]])],['estado','Estado','select',0,Object.entries(PE_EST).map(([k,v])=>[k,v[0]])],['notas','Notas','textarea',0,null,1]]},
   minutas:{t:'Minuta',f:[['obraId','Obra','obra',1,null,1],['titulo','Asunto de la reunión','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['lugar','Lugar','text'],['asistentes','Asistentes','asist',0,null,1],['temas','Temas tratados','textarea',0,null,1]]},
@@ -1029,7 +1108,7 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
   const fld=([k,l,t,req,opts,full,hint,when])=>{const v=o[k]??'';const id='f-'+k;const lab=`<label for="${id}">${l}${req?' *':''}</label>`;let inp;
     if(t==='select')inp=`<select id="${id}" name="${k}">${opts.map(x=>{const[a,b]=Array.isArray(x)?x:[x,x];return `<option value="${esc(a)}" ${String(v)===String(a)?'selected':''}>${esc(b)}</option>`}).join('')}</select>`;
     else if(t==='obra')inp=`<select id="${id}" name="${k}">${obraOpts().map(([a,b])=>`<option value="${a}" ${v===a?'selected':''}>${esc(b)}</option>`).join('')}</select>`;
-    else if(t==='list')inp=`<input id="${id}" name="${k}" list="${id}-l" value="${esc(v)}"><datalist id="${id}-l">${opts.map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`;
+    else if(t==='list')inp=`<input id="${id}" name="${k}" list="${id}-l" value="${esc(v)}"><datalist id="${id}-l">${(typeof opts==='function'?opts(o):opts).map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`;
     else if(t==='textarea')inp=`<textarea id="${id}" name="${k}">${esc(v)}</textarea>`;
     else if(t==='money')inp=`<input id="${id}" name="${k}" inputmode="decimal" value="${v===''?'':esc(v)}" placeholder="0.00">`;
     else if(t==='user')inp=`<select id="${id}" name="${k}"><option value="">Sin asignar</option>${usersObra(o.obraId).map(u=>`<option value="${esc(u.id)}" ${v===u.id?'selected':''}>${esc(u.nombre)} · ${esc(ROLES[u.rol]||'')}</option>`).join('')}</select>`;
@@ -1061,6 +1140,9 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
       else if(out.aprobFecha){out.aprobFecha='';out.aprobKey='';out.aprobMotivo=''}}
     if(col==='avances'&&out.fecha){const dup=S.avances.filter(a=>a.obraId===out.obraId&&a.id!==out.id&&!a.deleted&&qFin(a.fecha)===qFin(out.fecha));if(dup.length>=2){$('#frmErr').textContent=`La ${qLbl(out.fecha)} ya tiene dos cortes (${dup.map(a=>fD(a.fecha)).join(' y ')}). Edita uno de ellos en lugar de crear otro.`;return}
       if(dup.some(a=>a.fecha===out.fecha)){$('#frmErr').textContent=`Ya hay un corte con fecha ${fD(out.fecha)}. Edita ese corte.`;return}}
+    if((col==='conceptos'||col==='conceptosX')&&S.conceptos.some(c=>c.obraId===out.obraId&&c.id!==out.id&&!c.deleted&&String(c.clave).trim().toLowerCase()===String(out.clave).trim().toLowerCase())){$('#frmErr').textContent=`Ya existe la clave ${out.clave} en esta obra.`;return}
+    if(col==='avconc'){if(out.fecha>HOY()){$('#frmErr').textContent='La fecha no puede ser futura.';return}if(!num(out.cantidad)){$('#frmErr').textContent='Captura una cantidad distinta de cero.';return}
+      const c=byId('conceptos',out.obraId?out.conceptoId:o.conceptoId);if(c){const prev=S.avconc.filter(a=>a.conceptoId===c.id&&a.id!==out.id&&!a.deleted).reduce((t,a)=>t+num(a.cantidad),0);const tot=prev+num(out.cantidad);if(tot<0){$('#frmErr').textContent='El acumulado quedaría negativo.';return}const pc=num(c.cantidad)>0?tot/num(c.cantidad)*100:0;if(pc>100.0001)out._apMsg=`Guardado. Ojo: el acumulado (${fmtN(tot)} ${c.unidad||''}) supera la cantidad de proyecto (${pct(pc)}). Se marca en rojo.`}}
     if(col==='documentos'&&esCat(out.tipo)){const n=fileBuf?fileBuf.name:(o.archivo||'');if(!n){$('#frmErr').textContent='Adjunta el catálogo de conceptos en hoja de cálculo (.xlsx, .xls, .xlsm, .ods o .csv).';return}if(!XLS_RE.test(n)){$('#frmErr').textContent=`"${n}" no es hoja de cálculo. El catálogo solo acepta .xlsx, .xls, .xlsm, .ods o .csv.`;return}}
     if(col==='bitacora'&&out.tipo==='Respuesta'&&!notaFolio(out.obraId,out.respondeA)){$('#frmErr').textContent='No existe una nota aprobada con el número '+out.respondeA+' en esta obra.';return}
     if(fileBuf){out.archivo=fileBuf.name;out.mime=fileBuf.type;out.size=fileBuf.size;out.ruta='';out._blob=fileBuf}
@@ -1112,6 +1194,8 @@ const ACT={
   logoDel:()=>{const F={...fmtImp(),id:'formato'};F.logo='';put('ajustes',F);logoBuf=null;render();toast('Logo quitado')},
   printMin:()=>{const b=document.querySelector('[data-act="printMin"]');const m=b&&byId('minutas',b.dataset.min);if(m)previewMinuta(m)},
   doPrint:()=>{const b=document.querySelector('[data-act="doPrint"]');const m=b&&byId('minutas',b.dataset.min);if(m)printMinuta(m)},
+  newConc:()=>{if(!isAdmin()||!needObra())return;formConc(null,false)},
+  newExt:()=>{if(!canCreate('conceptos')||!needObra())return;formConc(null,true)},
   pvPdf:()=>pdfDoc(),
   pvPrint:()=>printDoc(),
   informe:()=>informeForm(),
@@ -1267,6 +1351,11 @@ document.addEventListener('click',e=>{const t=e.target;
   const us=t.closest('[data-user]');if(us){userForm(us.dataset.user);return}
   const rv=t.closest('[data-rev]');if(rv){const[a,id]=rv.dataset.rev.split(':');revisar(a,id);return}
   const bt=t.closest('[data-bit]');if(bt){showBit(byId('bitacora',bt.dataset.bit));return}
+  const xa=t.closest('[data-exap]');if(xa){exAp(xa.dataset.exap,xa.dataset.acc);return}
+  const cc=t.closest('[data-conc]');if(cc){showConc(byId('conceptos',cc.dataset.conc));return}
+  const ec=t.closest('[data-editconc]');if(ec){const c=byId('conceptos',ec.dataset.editconc);if(c&&canEdit('conceptos',c))formConc(c,c.extra);return}
+  const ac2=t.closest('[data-avconc]');if(ac2){const c=byId('conceptos',ac2.dataset.avconc);if(c&&canCreate('avconc')&&cuentaC(c))formAvC(c);return}
+  const av2=t.closest('[data-avc]');if(av2){const a=byId('avconc',av2.dataset.avc);const c=a&&byId('conceptos',a.conceptoId);if(a&&c&&canEdit('avconc',a))formAvC(c,a);return}
   const pa=t.closest('[data-penap]');if(pa){apPen(pa.dataset.penap,pa.dataset.acc,pa);return}
   const tg=t.closest('[data-toggle]');if(tg){const p0=byId('pendientes',tg.dataset.toggle);if(!p0)return;const p={...p0};
     if(!canMark(p)){toast(p.asignadoId?`Solo ${userNom(p.asignadoId)||'la persona asignada'} puede marcarlo como hecho.`:'No tiene a nadie asignado: solo Infraestructura (gerente o coordinador regional) puede cerrarlo.');return}
@@ -1291,7 +1380,7 @@ document.addEventListener('click',e=>{const t=e.target;
   const gp=t.closest('[data-gps]');if(gp){getGPS(gp.dataset.gps);return}
   if(t.closest('#net')){go('config');return}
   if(t.closest('#userBtn')){go('config');return}
-  if(t.closest('#fab')){if(V.view==='obras'&&V.id){const m={estimaciones:'newEst',avance:'newAv',pendientes:'newPen',minutas:'newMin',bitacora:'newBit',evidencias:'newEv',documentos:'newDoc'}[V.tab]||'newEv';ACT[m]()}else{const m=FAB[V.view];if(m)ACT[m]()}return}
+  if(t.closest('#fab')){if(V.view==='obras'&&V.id){const m=TAB_FAB[V.tab]||'newEv';const k=FAB_COL[m];if(k&&!canCreate(k)){toast('Solo puedes consultar esta información');return}ACT[m]()}else{const m=FAB[V.view];if(m)ACT[m]()}return}
 });
 document.addEventListener('change',async ev=>{const t=ev.target;
   if(t.id==='obraFil'){V.obra=t.value;render();return}
@@ -1331,6 +1420,7 @@ window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h
   await openDB();
   const has=await idbGet('obras');
   if(has===undefined){seed()}else{for(const c of COLS)S[c]=(await idbGet(c))||[];S.config={...S.config,...((await idbGet('config'))||{})};S.cola=(await idbGet('cola'))||[];S.sync={...S.sync,...((await idbGet('sync'))||{})}}
+  if(S.config.ejemplos&&!S.config.catSeed&&!S.conceptos.length&&S.obras.some(o=>o.id==='o1'&&o.ejemplo)){seedCat();S.config.catSeed=1;persist('config');persist('conceptos');persist('avconc')}
   S.usuarios=(await idbGet('usuarios'))||[];if(!S.usuarios.length)seedUsers();await ensureCreds();
   U=S.sync.on&&S.sync.url?(S.config.cloudU||null):(S.config.ses&&S.usuarios.find(z=>z.id===S.config.ses)||null);
   const h=location.hash.slice(1);if(NAV.some(n=>n[0]===h))V.view=h;
