@@ -1,7 +1,7 @@
 // Guarda la app en el teléfono para que abra sin señal.
 // La página se pide primero a internet (para tener siempre la última versión)
 // y solo si no hay señal se usa la copia guardada.
-const CACHE='control-obras-v15';
+const CACHE='control-obras-v16';
 const FILES=['./','./index.html','./manifest.json','./icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x.startsWith('control-obras')&&x!==CACHE).map(x=>caches.delete(x)))));self.clients.claim()});

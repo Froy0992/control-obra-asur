@@ -222,7 +222,10 @@ td.r,th.r{text-align:right}
 .pv img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .pv-it{position:relative;display:inline-block}
 .err-box{background:color-mix(in srgb,var(--bad) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:8px;padding:10px 12px}
-.err-box .note{font-weight:600;font-size:14px}
+.err-box .note{font-size:14px}
+.err-list{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-weight:500}
+.err-fut{display:block;margin-top:8px;color:var(--fg)}
+.ap-card{border-color:color-mix(in srgb,var(--warn,#c98a00) 45%,var(--line))}
 .pv-x{all:unset;cursor:pointer;position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;background:var(--ink2,#333);color:#fff;font-size:12px;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .ph-btn{cursor:pointer;flex:1 1 140px;justify-content:center;white-space:nowrap}
 .x{all:unset;cursor:pointer;width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
@@ -495,9 +498,9 @@ function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())r
 function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
 const COL_L={obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
 const refTxt=(col,o)=>col==='estimaciones'?'Estimación '+o.numero:col==='avances'?'Corte del '+fD(o.fecha):col==='bitacora'?(o.folio?'Nota '+o.folio:'Nota sin folio')+' · '+(o.tipo||''):col==='convenios'?'Convenio '+(o.numero||''):String(o.titulo||o.nombre||o.concepto||o.numero||'');
-const SKIP=['upd','por','porId','ruta','mime','size','ejemplo','aprobadoPor','fechaAprob'];
-function fLabel(col,k){const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);return f?f[1]:({estado:'Estado',folio:'Folio',motivo:'Motivo de rechazo',archivo:'Archivo'}[k]||k)}
-function fmtF(col,k,v){if(v==null||v==='')return '—';if(k==='asistentes')return asList({asistentes:v}).map(a=>a.nombre).join(', ')||'—';if(k==='estado'||k==='prioridad'){const m={...OB_EST,...ES_EST,...PE_EST,...BIT_EST,...PRIO}[v];return m?m[0]:String(v)}const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);if(f&&f[2]==='money')return money(v);if(f&&f[2]==='date')return fD(v);if(f&&f[2]==='datetime-local')return fDT(v);if(f&&f[2]==='obra')return obraCorto(v);return fmtV(v)}
+const SKIP=['upd','por','porId','ruta','mime','size','ejemplo','aprobadoPor','fechaAprob','aprobKey','aprobEl'];
+function fLabel(col,k){const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);return f?f[1]:({estado:'Estado',folio:'Folio',motivo:'Motivo de rechazo',archivo:'Archivo',aprobFecha:'Aprobación de fechas',aprobMotivo:'Motivo de aprobación',aprobNota:'Motivo del rechazo de fechas',aprobPor:'Aprobación por'}[k]||k)}
+function fmtF(col,k,v){if(v==null||v==='')return '—';if(k==='asistentes')return asList({asistentes:v}).map(a=>a.nombre).join(', ')||'—';if(k==='aprobFecha'){const m=AP_EST[v];return m?m[0]:String(v)}if(k==='estado'||k==='prioridad'){const m={...OB_EST,...ES_EST,...PE_EST,...BIT_EST,...PRIO}[v];return m?m[0]:String(v)}const f=((typeof FORMS!=='undefined'&&FORMS[col])||{f:[]}).f.find(x=>x[0]===k);if(f&&f[2]==='money')return money(v);if(f&&f[2]==='date')return fD(v);if(f&&f[2]==='datetime-local')return fDT(v);if(f&&f[2]==='obra')return obraCorto(v);return fmtV(v)}
 function fmtV(v){if(v==null||v==='')return '—';if(Array.isArray(v))return v.length+' foto(s)';const t=String(v);return t.length>90?t.slice(0,90)+'…':t}
 function logH(col,o,accion,cambios){if(col==='historial')return;const oid=col==='obras'?o.id:o.obraId;if(!oid)return;const now=new Date().toISOString();const h={id:uid(),obraId:oid,fecha:now,upd:now,usuario:U?U.nombre:'—',rol:U?U.rol:'',accion,tipo:COL_L[col]||col,ref:refTxt(col,o),cambios:cambios||[]};h.por=h.usuario;S.historial.unshift(h);persist('historial');queue('historial',h.id)}
 const saveUsers=()=>idbSet('usuarios',S.usuarios);
@@ -515,31 +518,36 @@ const ofObra=(col,id)=>id?D[col].filter(x=>x.obraId===id):D[col];
 const convDe=id=>D.convenios.filter(c=>c.obraId===id);
 const vigente=o=>num(o.monto)+convDe(o.id).reduce((a,c)=>a+num(c.monto),0);
 const finVig=o=>addDays(o.fin,convDe(o.id).reduce((a,c)=>a+num(c.dias),0));
-/* Coherencia de fechas de una estimación: devuelve el primer problema o '' */
-function checkEst(e){const o=byId('obras',e.obraId)||{};const hoy=HOY();const ini=e.periodoIni,fin=e.periodoFin,pres=e.fechaPres,pago=e.fechaPago;
-  if(ini&&fin&&ini>fin)return 'El periodo inicia después de terminar: revisa "Periodo del" y "Periodo al".';
-  if(o.inicio&&ini&&ini<o.inicio)return `El periodo no puede iniciar antes del inicio del contrato (${fD(o.inicio)}).`;
-  const fv=o.fin?finVig(o):'';if(fv&&fin&&fin>fv)return `El periodo termina después del término vigente del contrato (${fD(fv)}). Si hay ampliación de plazo, registra primero el convenio.`;
-  if(fin&&fin>hoy)return 'El periodo no puede terminar en una fecha futura.';
-  if(pres&&fin&&pres<fin)return `La fecha de presentación (${fD(pres)}) no puede ser anterior al cierre del periodo (${fD(fin)}).`;
-  if(pres&&pres>hoy)return 'La fecha de presentación no puede ser futura.';
-  if(pago&&!pres)return 'Captura la fecha de presentación antes de la de pago.';
-  if(pago&&pres&&pago<pres)return `La fecha de pago (${fD(pago)}) no puede ser anterior a la presentación (${fD(pres)}).`;
-  if(pago&&pago>hoy)return 'La fecha de pago no puede ser futura.';
-  if(e.estado==='pagada'&&!pago)return 'Para marcarla como pagada, captura la fecha de pago.';
-  if(pago&&e.estado!=='pagada')return 'Tiene fecha de pago: cambia el estado a "Pagada" o borra la fecha.';
-  if(['revision','autorizada'].includes(e.estado)&&!pres)return 'Captura la fecha de presentación para ponerla en revisión o autorizarla.';
+/* Coherencia de fechas de una estimación.
+   errs: problemas que impiden guardar. fut: fechas posteriores a hoy, que se guardan pero piden aprobación. */
+function checkEst(e){const o=byId('obras',e.obraId)||{};const hoy=HOY();const ini=e.periodoIni,fin=e.periodoFin,pres=e.fechaPres,pago=e.fechaPago;const errs=[],fut=[];
+  if(ini&&fin&&ini>fin)errs.push('El periodo inicia después de terminar: revisa "Periodo del" y "Periodo al".');
+  if(o.inicio&&ini&&ini<o.inicio)errs.push(`El periodo no puede iniciar antes del inicio del contrato (${fD(o.inicio)}).`);
+  const fv=o.fin?finVig(o):'';if(fv&&fin&&fin>fv)errs.push(`El periodo termina después del término vigente del contrato (${fD(fv)}). Si hay ampliación de plazo, registra primero el convenio.`);
+  if(ini&&ini>hoy)fut.push(`el periodo inicia el ${fD(ini)}`);else if(fin&&fin>hoy)fut.push(`el periodo termina el ${fD(fin)}`);
+  if(pres&&fin&&pres<fin)errs.push(`La fecha de presentación (${fD(pres)}) no puede ser anterior al cierre del periodo (${fD(fin)}).`);
+  if(pres&&pres>hoy)fut.push(`la presentación es el ${fD(pres)}`);
+  if(pago&&!pres)errs.push('Captura la fecha de presentación antes de la de pago.');
+  if(pago&&pres&&pago<pres)errs.push(`La fecha de pago (${fD(pago)}) no puede ser anterior a la presentación (${fD(pres)}).`);
+  if(pago&&pago>hoy)errs.push('La fecha de pago no puede ser futura.');
+  if(e.estado==='pagada'&&!pago)errs.push('Para marcarla como pagada, captura la fecha de pago.');
+  if(pago&&e.estado!=='pagada')errs.push('Tiene fecha de pago: cambia el estado a "Pagada" o borra la fecha.');
+  if(['revision','autorizada'].includes(e.estado)&&!pres)errs.push('Captura la fecha de presentación para ponerla en revisión o autorizarla.');
   const otras=S.estimaciones.filter(x=>x.obraId===e.obraId&&x.id!==e.id&&!x.deleted);
-  if(otras.some(x=>num(x.numero)===num(e.numero)))return `Ya existe la estimación ${e.numero} en esta obra.`;
+  if(otras.some(x=>num(x.numero)===num(e.numero)))errs.push(`Ya existe la estimación ${e.numero} en esta obra.`);
   for(const x of otras.filter(x=>x.estado!=='devuelta'&&x.periodoFin)){const xi=x.periodoIni||x.periodoFin;
-    if(ini<=x.periodoFin&&fin>=xi)return `El periodo se empalma con la estimación ${x.numero} (${fD(xi)} – ${fD(x.periodoFin)}).`;
-    if(num(x.numero)<num(e.numero)&&xi>fin)return `La estimación ${x.numero} es anterior pero su periodo es posterior (${fD(xi)}). Revisa el número o las fechas.`;
-    if(num(x.numero)>num(e.numero)&&x.periodoFin<ini)return `La estimación ${x.numero} es posterior pero su periodo es anterior (${fD(x.periodoFin)}). Revisa el número o las fechas.`}
-  return ''}
+    if(ini<=x.periodoFin&&fin>=xi){errs.push(`El periodo se empalma con la estimación ${x.numero} (${fD(xi)} – ${fD(x.periodoFin)}).`);continue}
+    if(num(x.numero)<num(e.numero)&&xi>fin)errs.push(`La estimación ${x.numero} es anterior pero su periodo es posterior (${fD(xi)}). Revisa el número o las fechas.`);
+    if(num(x.numero)>num(e.numero)&&x.periodoFin<ini)errs.push(`La estimación ${x.numero} es posterior pero su periodo es anterior (${fD(x.periodoFin)}). Revisa el número o las fechas.`)}
+  return {errs,fut}}
+/* Estimaciones con fecha posterior a hoy esperando aprobación del gerente o del coordinador */
+const cuentaEst=e=>e.estado!=='devuelta'&&!['pendiente','rechazada'].includes(e.aprobFecha);
+const estPorAprobar=()=>D.estimaciones.filter(e=>e.aprobFecha==='pendiente');
+const AP_EST={pendiente:['Fecha por aprobar','warn'],aprobada:['Fecha aprobada','ok'],rechazada:['Fecha rechazada','bad']};
 function calcEst(e){const o=byId('obras',e.obraId)||{};const imp=num(e.importe);const am=e.amort!==''&&e.amort!=null?num(e.amort):imp*num(o.anticipo)/100;const iva=(imp-am)*IVA;const neto=imp-am+iva-num(e.retenciones)-num(e.penas);return{imp,am,iva,neto}}
 const cortesDe=id=>D.avances.filter(a=>a.obraId===id).sort((a,b)=>a.fecha<b.fecha?-1:1);
 function resumen(o){
-  const es=D.estimaciones.filter(e=>e.obraId===o.id&&e.estado!=='devuelta');
+  const es=D.estimaciones.filter(e=>e.obraId===o.id&&cuentaEst(e));
   const sum=(arr,f)=>arr.reduce((a,e)=>a+f(e),0);
   const vig=vigente(o);const est=sum(es,e=>num(e.importe));
   const aut=sum(es.filter(e=>['autorizada','pagada'].includes(e.estado)),e=>num(e.importe));
@@ -675,7 +683,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v15';
+const APP_VER='20-nov-2026 · v16';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -720,11 +728,17 @@ const NAV_ALL=[['panel','Panel','home'],['obras','Obras','build'],['estimaciones
 const NAV=NAV_ALL;
 function navFor(){if(!U)return [['config','Ajustes','gear']];if(isContra())return NAV_ALL.filter(n=>['obras','estimaciones','bitacora','config'].includes(n[0]));if(isExt())return NAV_ALL.filter(n=>['bitacora','config'].includes(n[0]));if(isAdmin())return NAV_ALL;return NAV_ALL.filter(n=>n[0]!=='historial')}
 function bnavFor(){if(isContra())return [['obras','Mi obra','build'],['estimaciones','Estimaciones','cash'],['bitacora','Bitácora','book'],['config','Ajustes','gear']];if(isExt())return [['bitacora','Bitácora','book'],['config','Ajustes','gear']];return [['panel','Panel','home'],['obras','Obras','build'],['pendientes','Pendientes','check'],['evidencias','Evidencias','camera'],['mas','Más','more']]}
+function apEstCard(){const it=estPorAprobar();if(!isAdmin()||!it.length)return '';
+  return `<div class="card ap-card"><div class="card-h"><h2>Estimaciones con fecha posterior a hoy por aprobar</h2><span class="badge">${it.length}</span></div><div class="card-b"><div class="lst">${it.map(e=>`<div class="li"><span class="folio">Est. ${esc(e.numero)}</span><div style="min-width:0"><b>${esc(obraCorto(e.obraId))}</b><div class="sub num">Periodo ${fD(e.periodoIni)} – ${fD(e.periodoFin)}${e.fechaPres?' · presentación '+fD(e.fechaPres):''} · ${money(num(e.importe))}</div><div class="txt">${esc(e.aprobMotivo||'')}</div></div><div class="acts"><button class="btn sm" data-apfecha="${e.id}" data-acc="no">Rechazar</button><button class="btn sm pri" data-apfecha="${e.id}" data-acc="ok">Aprobar</button></div></div>`).join('')}</div><p class="note" style="margin-bottom:0">Mientras no se aprueben, no cuentan en los acumulados ni en el avance financiero.</p></div></div>`}
+function apFecha(id,acc){const x=byId('estimaciones',id);if(!x||!isAdmin())return;
+  if(acc==='ok'){put('estimaciones',{...x,aprobFecha:'aprobada',aprobPor:U.nombre,aprobEl:new Date().toISOString(),aprobNota:''},'aprobó fecha');render();toast('Fechas aprobadas: la estimación ya cuenta en los acumulados');return}
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:480px"><div class="mh"><h2>Rechazar fechas de la estimación ${esc(x.numero)}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr"><div class="fld"><label for="apNota">Motivo (lo verá quien la capturó)</label><textarea id="apNota"></textarea></div><span class="note" id="apErr" style="color:var(--bad)"></span></div><div class="mf"><button class="btn" data-close="1">Cancelar</button><button class="btn danger" id="apNo">Rechazar</button></div></div></div>`;
+  $('#apNo').onclick=()=>{const n=$('#apNota').value.trim();if(!n){$('#apErr').textContent='Escribe el motivo.';return}put('estimaciones',{...x,aprobFecha:'rechazada',estado:'devuelta',aprobPor:U.nombre,aprobEl:new Date().toISOString(),aprobNota:n},'rechazó fecha');closeModal();render();toast('Estimación devuelta')}}
 const porAprobar=()=>D.bitacora.filter(b=>b.estado==='cargada'||b.estado==='revision');
 const V={view:'panel',id:null,tab:'resumen',obra:'',f:'',q:''};
 function go(view,id=null,tab='resumen'){V.view=view;V.id=id;V.tab=tab;V.f='';try{if(location.hash.slice(1)!==view)history.replaceState(null,'','#'+view)}catch(e){}render();window.scrollTo(0,0)}
-function navHtml(){const N=navFor(),B=bnavFor();const pa=isAdmin()?porAprobar().length:0;
-  $('#nav').innerHTML=N.map(([k,l,i])=>`<button data-go="${k}" ${V.view===k?'aria-current="page"':''}>${ic(i)}${l}${k==='bitacora'&&pa?` <span class="badge">${pa}</span>`:''}</button>`).join('');
+function navHtml(){const N=navFor(),B=bnavFor();const pa=isAdmin()?porAprobar().length:0;const pe=isAdmin()?estPorAprobar().length:0;
+  $('#nav').innerHTML=N.map(([k,l,i])=>`<button data-go="${k}" ${V.view===k?'aria-current="page"':''}>${ic(i)}${l}${k==='bitacora'&&pa?` <span class="badge">${pa}</span>`:''}${k==='estimaciones'&&pe?` <span class="badge">${pe}</span>`:''}</button>`).join('');
   $('#bnav').style.gridTemplateColumns=`repeat(${B.length},1fr)`;
   $('#bnav').innerHTML=B.map(([k,l,i])=>`<button data-go="${k}" ${(V.view===k||(k==='mas'&&!B.some(b=>b[0]===V.view)))?'aria-current="page"':''}>${ic(i)}${l}</button>`).join('');
   $('#uName').textContent=U?U.nombre:'Sin sesión';$('#uRol').textContent=U?ROLES[U.rol]:'Inicia sesión';$('#uAv').textContent=initials(U?U.nombre:'?');$('#mTitle').textContent=(NAV_ALL.find(n=>n[0]===V.view)||['','Buscar'])[1]}
@@ -768,7 +782,7 @@ function evGrid(items,showObra){if(!items.length)return empty('Sin evidencias. T
 
 function estTable(items,showObra){if(!items.length)return empty('Sin estimaciones registradas.','newEst','Registrar estimación');
   const rows=[...items].sort((a,b)=>String(b.periodoFin||'').localeCompare(String(a.periodoFin||''))||num(b.numero)-num(a.numero));
-  return `<div class="tbl-wrap"><table><thead><tr><th>No.</th>${showObra?'<th>Obra</th>':''}<th>Periodo</th><th class="r">Importe</th><th class="r">Amort. anticipo</th><th class="r">IVA</th><th class="r">Retenciones y penas</th><th class="r">Neto a pagar</th><th>Estado</th></tr></thead><tbody>${rows.map(e=>{const c=calcEst(e);return `<tr class="click" data-edit="estimaciones:${e.id}"><td class="num"><b>${esc(e.numero)}</b></td>${showObra?`<td>${esc(obraCorto(e.obraId))}</td>`:''}<td class="num">${fD(e.periodoIni)} – ${fD(e.periodoFin)}</td><td class="r num">${money(c.imp)}</td><td class="r num">${money(c.am)}</td><td class="r num">${money(c.iva)}</td><td class="r num">${money(num(e.retenciones)+num(e.penas))}</td><td class="r num"><b>${money(c.neto)}</b></td><td>${pill(ES_EST,e.estado)}</td></tr>`}).join('')}</tbody></table></div>`}
+  return `<div class="tbl-wrap"><table><thead><tr><th>No.</th>${showObra?'<th>Obra</th>':''}<th>Periodo</th><th class="r">Importe</th><th class="r">Amort. anticipo</th><th class="r">IVA</th><th class="r">Retenciones y penas</th><th class="r">Neto a pagar</th><th>Estado</th></tr></thead><tbody>${rows.map(e=>{const c=calcEst(e);return `<tr class="click" data-edit="estimaciones:${e.id}"><td class="num"><b>${esc(e.numero)}</b></td>${showObra?`<td>${esc(obraCorto(e.obraId))}</td>`:''}<td class="num">${fD(e.periodoIni)} – ${fD(e.periodoFin)}</td><td class="r num">${money(c.imp)}</td><td class="r num">${money(c.am)}</td><td class="r num">${money(c.iva)}</td><td class="r num">${money(num(e.retenciones)+num(e.penas))}</td><td class="r num"><b>${money(c.neto)}</b></td><td>${pill(ES_EST,e.estado)}${e.aprobFecha?' '+pill(AP_EST,e.aprobFecha):''}${e.aprobFecha==='rechazada'&&e.aprobNota?`<div class="note" style="white-space:normal;color:var(--bad)">${esc(e.aprobNota)}</div>`:''}</td></tr>`}).join('')}</tbody></table></div>`}
 
 function sumGrid(r){return `<div class="sumgrid">
   <div><small>Monto vigente (sin IVA)</small><b>${mShort(r.vig)}</b></div>
@@ -783,7 +797,7 @@ function sumGrid(r){return `<div class="sumgrid">
 /* ---------- Gráfica de avance (curva S) ---------- */
 const CH={};
 function sCurve(o){const cs=cortesDe(o.id);if(!cs.length)return `<div class="empty">Registra el primer corte de avance para ver la curva.</div>`;
-  const vig=vigente(o)||1;const es=D.estimaciones.filter(e=>e.obraId===o.id&&e.estado!=='devuelta');
+  const vig=vigente(o)||1;const es=D.estimaciones.filter(e=>e.obraId===o.id&&cuentaEst(e));
   const finAt=f=>es.filter(e=>(e.periodoFin||'')<=f).reduce((a,e)=>a+num(e.importe),0)/vig*100;
   const pts=[{fecha:o.inicio||cs[0].fecha,p:0,r:0,f:0},...cs.map(c=>({fecha:c.fecha,p:num(c.programado),r:num(c.real),f:finAt(c.fecha)}))];
   const W=640,H=250,L=40,R=116,T=14,B=30;const t0=toD(pts[0].fecha).getTime(),t1=Math.max(toD(pts[pts.length-1].fecha).getTime(),t0+864e5);
@@ -824,6 +838,7 @@ panel(){
   const d=new Date();
   return `${phead(isAdmin()?'Panel de obras':'Panel de mi contrato',`Seguimiento de contratos al ${d.getDate()} de ${['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][d.getMonth()]} de ${d.getFullYear()}`,isAdmin()?`<button class="btn pri" data-act="newObra">${ic('plus')}Nueva obra</button>`:'')}
   ${demoBanner()}
+  ${apEstCard()}
   ${isAdmin()&&porAprobar().length?`<div class="card"><div class="card-h"><h2>Notas de bitácora por aprobar</h2><button class="link" data-go="bitacora">Ver bitácora</button></div><div class="card-b">${bitList(porAprobar(),true)}</div></div>`:''}
   <div class="kpis">
     <div class="card kpi"><div class="ic tint-teal">${ic('build')}</div><div><div class="lb">Obras en ejecución</div><div class="v num">${act.length}</div><div class="d ${atr?'down':'up'}">${atr?atr+' con atraso':'Todas en programa'}<small>${D.obras.length} contratos registrados</small></div></div></div>
@@ -847,7 +862,8 @@ obras(){if(V.id)return obraDetail(byId('obras',V.id));
 estimaciones(){const obs=D.obras.filter(o=>!V.obra||o.id===V.obra);const rs=obs.map(o=>[o,resumen(o)]);const T=k=>rs.reduce((a,[,r])=>a+r[k],0);
   const es=D.estimaciones.filter(e=>(!V.obra||e.obraId===V.obra)&&(!V.f||e.estado===V.f));
   const tv=T('vig'),te=T('est');
-  return `${phead('Estimaciones','Importes sin IVA. Las devueltas no cuentan en los acumulados.',obraSel()+(canCreate('estimaciones')?`<button class="btn pri hide-m" data-act="newEst">${ic('plus')}Registrar estimación</button>`:''))}
+  return `${phead('Estimaciones','Importes sin IVA. Las devueltas y las que esperan aprobación de fechas no cuentan en los acumulados.',obraSel()+(canCreate('estimaciones')?`<button class="btn pri hide-m" data-act="newEst">${ic('plus')}Registrar estimación</button>`:''))}
+  ${apEstCard()}
   <div class="card"><div class="card-h"><h2>Resumen de estimaciones</h2></div><div class="card-b">${rs.length?`<div class="tbl-wrap"><table><thead><tr><th>Obra</th><th class="r">Monto vigente</th><th class="r">Estimado</th><th class="r">% fin.</th><th class="r">Autorizado</th><th class="r">Pagado neto</th><th class="r">En trámite</th><th class="r">Anticipo por amortizar</th><th class="r">Saldo por estimar</th></tr></thead><tbody>${rs.map(([o,r])=>`<tr class="click" data-obra="${o.id}" data-tab="estimaciones"><td><b>${esc(o.aeropuerto||'')}</b> · ${esc(o.numero)}<div class="note">${r.n} estimaciones</div></td><td class="r num">${money(r.vig)}</td><td class="r num">${money(r.est)}</td><td class="r num"><b>${pct(r.fin)}</b></td><td class="r num">${money(r.aut)}</td><td class="r num">${money(r.pag)}</td><td class="r num">${money(r.tram)}</td><td class="r num">${money(r.porAmort)}</td><td class="r num">${money(r.saldo)}</td></tr>`).join('')}
   <tr><td><b>Total</b></td><td class="r num"><b>${money(tv)}</b></td><td class="r num"><b>${money(te)}</b></td><td class="r num"><b>${pct(tv?te/tv*100:0)}</b></td><td class="r num"><b>${money(T('aut'))}</b></td><td class="r num"><b>${money(T('pag'))}</b></td><td class="r num"><b>${money(T('tram'))}</b></td><td class="r num"><b>${money(T('porAmort'))}</b></td><td class="r num"><b>${money(T('saldo'))}</b></td></tr></tbody></table></div>`:empty('Sin obras.')}</div></div>
   <div class="card"><div class="card-h"><h2>Estimaciones</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">${chips([['','Todas'],...Object.entries(ES_EST).map(([k,v])=>[k,v[0]])])}${estTable(es,!V.obra)}</div></div>`},
@@ -986,7 +1002,12 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
     F.f.forEach(([k,l,t,req,,,,when])=>{if(when&&String(form.elements[when[0]]?.value)!==when[1]){delete out[k];return}if(t==='asist'){out.asistentes=[...form.querySelectorAll('.as-row')].map(r=>({nombre:r.querySelector('[data-k=nombre]').value.trim(),cargo:r.querySelector('[data-k=cargo]').value.trim(),empresa:r.querySelector('[data-k=empresa]').value.trim()})).filter(a=>a.nombre);return}if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
     if(form.elements.acuerdos){out._acuerdos=form.elements.acuerdos.value;out._resp=form.elements.acResp.value;out._fecha=form.elements.acFecha.value}
     if(miss.length){$('#frmErr').textContent='Falta: '+miss.join(', ');return}
-    if(col==='estimaciones'){const m=checkEst(out);if(m){const er=$('#frmErr');er.textContent='⚠ '+m;er.closest('.fld').classList.add('err-box');try{er.scrollIntoView({block:'center',behavior:'smooth'})}catch(_){}return}}
+    if(col==='estimaciones'){const r=checkEst(out);const er=$('#frmErr');
+      if(r.errs.length){er.innerHTML=`<b>⚠ ${r.errs.length===1?'Hay 1 problema':'Hay '+r.errs.length+' problemas'} con las fechas:</b><ol class="err-list">${r.errs.map(m=>`<li>${esc(m)}</li>`).join('')}</ol>${r.fut.length?`<span class="err-fut">Además, como ${esc(r.fut.join(' y '))}, al corregir lo anterior se enviará a aprobación.</span>`:''}`;er.closest('.fld').classList.add('err-box');try{er.scrollIntoView({block:'center',behavior:'smooth'})}catch(_){}return}
+      const key=[out.periodoIni,out.periodoFin,out.fechaPres].join('|');
+      if(r.fut.length){if(isAdmin()){out.aprobFecha='aprobada';out.aprobPor=U.nombre;out.aprobEl=new Date().toISOString();out.aprobKey=key;out._apMsg='Guardada. Como tiene fechas posteriores a hoy, quedó aprobada por ti.'}
+        else if(!(o.aprobFecha==='aprobada'&&o.aprobKey===key)){out.aprobFecha='pendiente';out.aprobKey=key;out.aprobMotivo='Fechas posteriores a hoy: '+r.fut.join(' y ')+'.';out.aprobPor='';out.aprobNota='';out._apMsg='Guardada y enviada a aprobación: tiene fechas posteriores a hoy. La puede aprobar el gerente o el coordinador de infraestructura.'}}
+      else if(out.aprobFecha){out.aprobFecha='';out.aprobKey='';out.aprobMotivo=''}}
     if(col==='bitacora'&&out.tipo==='Respuesta'&&!notaFolio(out.obraId,out.respondeA)){$('#frmErr').textContent='No existe una nota aprobada con el número '+out.respondeA+' en esta obra.';return}
     if(fileBuf){out.archivo=fileBuf.name;out.mime=fileBuf.type;out.size=fileBuf.size;out.ruta='';out._blob=fileBuf}
     closeModal();onSave(out)};
@@ -1003,7 +1024,7 @@ function confirmDo(msg,fn){$('#modalRoot').innerHTML=`<div class="ov" data-close
 /* ---------- Guardado por tipo ---------- */
 const curObra=()=>V.view==='obras'&&V.id?V.id:(V.obra||(D.obras.find(o=>o.estado==='ejecucion')||D.obras[0]||{}).id);
 function needObra(){if(!D.obras.length){toast('Primero registra una obra');ACT.newObra();return false}return true}
-function saver(col,msg,after){return o=>{if(o===null){del(col,lastEdit);render();toast('Eliminado');return}
+function saver(col,msg,after){return o=>{const apm=o&&o._apMsg;if(o)delete o._apMsg;if(apm)setTimeout(()=>toast(apm),2700);if(o===null){del(col,lastEdit);render();toast('Eliminado');return}
   if(!o.id)o.id=uid();
   if(col==='documentos'&&o._blob){fileSet(o.id,o._blob);delete o._blob}
   if(col==='bitacora'){if(!o.estado)o.estado=isAdmin()?'aprobada':'cargada';if(o.estado==='aprobada'&&!o.folio)o.folio=nextFolio(o.obraId)}
@@ -1129,6 +1150,7 @@ document.addEventListener('click',e=>{const t=e.target;
   const ed=t.closest('[data-edit]');if(ed){const[c,id]=ed.dataset.edit.split(':');closeModal();editRec(c,id);return}
   const ob=t.closest('[data-obra]');if(ob){go('obras',ob.dataset.obra,ob.dataset.tab||'resumen');return}
   const tb=t.closest('[data-tab]');if(tb&&V.view==='obras'&&V.id){V.tab=tb.dataset.tab;render();return}
+  const af=t.closest('[data-apfecha]');if(af){apFecha(af.dataset.apfecha,af.dataset.acc);return}
   const pd=t.closest('[data-pvdel]');if(pd){photoBuf.splice(+pd.dataset.pvdel,1);$('#pv').innerHTML=pvHtml();return}
   const a=t.closest('[data-act]');if(a){const k=a.dataset.act;if(ACT_COL[k]&&!canCreate(ACT_COL[k])){toast('Solo puedes consultar esta información');return}ACT[k]&&ACT[k]();return}
   const f=t.closest('[data-f]');if(f){V.f=f.dataset.f;render();return}
