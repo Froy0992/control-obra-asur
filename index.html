@@ -477,7 +477,8 @@ const PE_EST={pendiente:['Pendiente','warn'],proceso:['En proceso','info'],porSu
 const PRIO={alta:['Alta','bad'],media:['Media','warn'],baja:['Baja','off']};
 const BIT_T=['Apertura','Avance','Instrucción','Solicitud','Respuesta','Incidencia','Clima','Visita','Cierre'];
 const notaFolio=(oid,n)=>S.bitacora.find(b=>b.obraId===oid&&b.estado==='aprobada'&&Number(b.folio)===Number(n));
-const DOC_T=['Contrato','Convenio modificatorio','Fianza','Programa de obra','Catálogo de conceptos','Planos','Estimación','Oficio','Acta','Otro'];
+const XLS_RE=/\.(xlsx|xlsm|xls|ods|csv)$/i;const XLS_ACC='.xlsx,.xlsm,.xls,.ods,.csv';const esCat=t=>t==='Catálogo de conceptos';
+const DOC_T=['Contrato','Alta de obra','Convenio modificatorio','Fianza','Programa de obra','Catálogo de conceptos','Planos','Estimación','Oficio','Acta','Otro'];
 const AEROS=['Cancún','Cozumel','Mérida','Huatulco','Oaxaca','Tapachula','Veracruz','Villahermosa','Minatitlán'];
 const IVA=0.16;
 
@@ -708,7 +709,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v21';
+const APP_VER='20-nov-2026 · v22';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -1043,6 +1044,7 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
   const form=$('#frm');
   if(col==='pendientes'&&!isAdmin()){const el=form.elements.estado;if(el){el.disabled=true;el.closest('.fld').insertAdjacentHTML('beforeend','<span class="hint">Se cambia con la casilla de la lista; el cierre lo aprueba Infraestructura (gerente o coordinador regional).</span>')}}
   if(col==='estimaciones'&&!isAdmin())['estado','fechaPago'].forEach(k=>{const el=form.elements[k];if(!el)return;el.disabled=true;const f=el.closest('.fld');f.insertAdjacentHTML('beforeend',`<span class="hint">Solo Infraestructura (gerente o coordinador regional) puede cambiarlo.</span>`)});
+  if(col==='documentos'){const tp=form.elements.tipo,fi=form.querySelector('[data-file]');const sync=()=>{if(!tp||!fi)return;const c=esCat(tp.value);if(c)fi.setAttribute('accept',XLS_ACC);else fi.removeAttribute('accept');const h=$('#fileH');if(h&&!fileBuf)h.textContent=c?'Solo hojas de cálculo: .xlsx, .xls, .xlsm, .ods o .csv. Este archivo servirá para cargar el catálogo y el avance por concepto.':(o.archivo?'Actual: '+o.archivo+'. Elige otro para reemplazarlo.':'Se guarda en este dispositivo y, si está activa la sincronización, en la nube.');if(c&&fileBuf&&!XLS_RE.test(fileBuf.name)){fileBuf=null;fi.value='';h.innerHTML='<span style="color:var(--bad)">El archivo elegido no es hoja de cálculo; elige otro.</span>'}};tp&&tp.addEventListener('change',sync);sync()}
   form.onsubmit=e=>{e.preventDefault();const out={...o};let miss=[];
     F.f.forEach(([k,l,t,req,,,,when])=>{if(when&&String(form.elements[when[0]]?.value)!==when[1]){delete out[k];return}if(t==='asist'){out.asistentes=[...form.querySelectorAll('.as-row')].map(r=>({nombre:r.querySelector('[data-k=nombre]').value.trim(),cargo:r.querySelector('[data-k=cargo]').value.trim(),empresa:r.querySelector('[data-k=empresa]').value.trim()})).filter(a=>a.nombre);return}if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
     if(form.elements.acuerdos){out._acuerdos=form.elements.acuerdos.value;out._resp=form.elements.acResp.value;out._fecha=form.elements.acFecha.value}
@@ -1059,6 +1061,7 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
       else if(out.aprobFecha){out.aprobFecha='';out.aprobKey='';out.aprobMotivo=''}}
     if(col==='avances'&&out.fecha){const dup=S.avances.filter(a=>a.obraId===out.obraId&&a.id!==out.id&&!a.deleted&&qFin(a.fecha)===qFin(out.fecha));if(dup.length>=2){$('#frmErr').textContent=`La ${qLbl(out.fecha)} ya tiene dos cortes (${dup.map(a=>fD(a.fecha)).join(' y ')}). Edita uno de ellos en lugar de crear otro.`;return}
       if(dup.some(a=>a.fecha===out.fecha)){$('#frmErr').textContent=`Ya hay un corte con fecha ${fD(out.fecha)}. Edita ese corte.`;return}}
+    if(col==='documentos'&&esCat(out.tipo)){const n=fileBuf?fileBuf.name:(o.archivo||'');if(!n){$('#frmErr').textContent='Adjunta el catálogo de conceptos en hoja de cálculo (.xlsx, .xls, .xlsm, .ods o .csv).';return}if(!XLS_RE.test(n)){$('#frmErr').textContent=`"${n}" no es hoja de cálculo. El catálogo solo acepta .xlsx, .xls, .xlsm, .ods o .csv.`;return}}
     if(col==='bitacora'&&out.tipo==='Respuesta'&&!notaFolio(out.obraId,out.respondeA)){$('#frmErr').textContent='No existe una nota aprobada con el número '+out.respondeA+' en esta obra.';return}
     if(fileBuf){out.archivo=fileBuf.name;out.mime=fileBuf.type;out.size=fileBuf.size;out.ruta='';out._blob=fileBuf}
     closeModal();onSave(out)};
@@ -1294,7 +1297,7 @@ document.addEventListener('change',async ev=>{const t=ev.target;
   if(t.id==='obraFil'){V.obra=t.value;render();return}
   if(t.dataset.logoup&&t.files[0]){logoBuf=await logoToData(t.files[0]);if(logoBuf)$('#logoPv').innerHTML=`<img src="${logoBuf}" alt="Logo nuevo" style="max-height:56px;max-width:180px;background:#fff;padding:4px;border-radius:6px"><span class="note" style="margin-left:8px">Guarda para aplicarlo</span>`;return}
   if(t.dataset.photos){let extra=0;for(const f of t.files){if(photoMax&&photoBuf.length>=photoMax){extra++;continue}const p=await compress(f);if(p)photoBuf.push(p)}$('#pv').innerHTML=pvHtml();t.value='';if(extra)toast(`Máximo ${photoMax} fotos por nota; ${extra===1?'1 no se agregó':extra+' no se agregaron'}.`);return}
-  if(t.dataset.file){fileBuf=t.files[0]||null;if(fileBuf){$('#fileH').textContent=fileBuf.name+' · '+(fileBuf.size/1048576).toFixed(1)+' MB';const n=$('#f-nombre');if(n&&!n.value)n.value=fileBuf.name.replace(/\.[^.]+$/,'')}return}
+  if(t.dataset.file){const f0=t.files[0]||null;const tp=$('#f-tipo');if(f0&&tp&&esCat(tp.value)&&!XLS_RE.test(f0.name)){t.value='';fileBuf=null;$('#fileH').innerHTML='<span style="color:var(--bad)">El catálogo solo acepta hojas de cálculo (.xlsx, .xls, .xlsm, .ods o .csv).</span>';return}fileBuf=f0;if(fileBuf){$('#fileH').textContent=fileBuf.name+' · '+(fileBuf.size/1048576).toFixed(1)+' MB';const n=$('#f-nombre');if(n&&!n.value)n.value=fileBuf.name.replace(/\.[^.]+$/,'')}return}
   if(t.id==='importFile'&&t.files[0]){try{const d=JSON.parse(await t.files[0].text());if(d.app!=='control-obras')throw 0;COLS.forEach(c=>{S[c]=Array.isArray(d[c])?d[c]:[];persist(c);S[c].forEach(x=>queue(c,x.id))});if(d.config){S.config={...S.config,...d.config};persist('config')}go('panel');toast('Respaldo cargado')}catch(e){toast('Ese archivo no es un respaldo de esta app')}t.value=''}
 });
 document.addEventListener('submit',async ev=>{const f=ev.target;
