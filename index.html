@@ -531,8 +531,9 @@ const SUP_CARGA=['avances','estimaciones','conceptos','avconc'];
 const CONTRA_VE=['obras','bitacora','avances','estimaciones','convenios','pendientes','minutas','documentos','conceptos','avconc'];
 function visible(col,x){if(col==='ajustes'||isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isContra())return CONTRA_VE.includes(col);if(isExt())return col==='obras'||col==='bitacora';return true}
 const D=new Proxy({},{get:(_,col)=>(S[col]||[]).filter(x=>visible(col,x))});
-function canCreate(col){if(isAdmin())return true;if(!U)return false;if(isExt())return col==='bitacora'||(isSup()&&SUP_CARGA.includes(col));return col!=='obras'&&col!=='historial'}
-function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='conceptos')return isSup()&&!!x.extra&&x.exEstado!=='autorizado';if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
+const canCat=()=>isAdmin()||(!!U&&U.rol==='supervision');
+function canCreate(col){if(isAdmin())return true;if(!U)return false;if(col==='catalogoBase')return canCat();if(isExt())return col==='bitacora'||(isSup()&&SUP_CARGA.includes(col));return col!=='obras'&&col!=='historial'}
+function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='conceptos')return x.extra?isSup()&&x.exEstado!=='autorizado':canCat();if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
 const COL_L={conceptos:'Concepto de catálogo',avconc:'Avance de concepto',obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
 const refTxt=(col,o)=>col==='conceptos'?(o.extra?'Extraordinario ':'Concepto ')+(o.clave||'')+' · '+String(o.descripcion||'').slice(0,60):col==='avconc'?'Avance de '+((byId('conceptos',o.conceptoId)||{}).clave||'concepto')+' del '+fD(o.fecha):col==='estimaciones'?'Estimación '+o.numero:col==='avances'?'Corte del '+fD(o.fecha):col==='bitacora'?(o.folio?'Nota '+o.folio:'Nota sin folio')+' · '+(o.tipo||''):col==='convenios'?'Convenio '+(o.numero||''):String(o.titulo||o.nombre||o.concepto||o.numero||'');
 const SKIP=['upd','por','porId','ruta','mime','size','ejemplo','aprobadoPor','fechaAprob','aprobKey','aprobEl','hechoEl'];
@@ -722,7 +723,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v23';
+const APP_VER='20-nov-2026 · v24';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -815,8 +816,8 @@ function catTab(o){const cs=ofObra('conceptos',o.id);const base=cs.filter(c=>!c.
   const rows=catRows(base.slice());
   const exRows=ex.slice().sort((a,b)=>natCmp(a.clave,b.clave)).map(c=>{const e=ejecDe(c.id),q=num(c.cantidad),p=pctOf(e,q);return `<tr class="click c-row" data-conc="${c.id}"><td class="num"><b>${esc(c.clave||'')}</b></td><td class="c-desc">${esc(c.descripcion||'')}<div class="sub">${esc(c.partida||'')}${c.subpartida?' · '+esc(c.subpartida):''}</div></td><td>${pill(EX_EST,c.exEstado||'revision')}${isAdmin()&&(c.exEstado||'revision')==='revision'?`<div class="row" style="margin-top:6px;flex-wrap:nowrap"><button class="btn sm" data-exap="${c.id}" data-acc="no">Rechazar</button><button class="btn sm pri" data-exap="${c.id}" data-acc="ok">Autorizar</button></div>`:''}</td><td class="cbc">${cuentaC(c)?semBar(p):'<span class="note">—</span>'}</td><td>${esc(c.unidad||'')}</td><td class="r num">${fmtN(q)}</td><td class="r num">${money(num(c.pu))}</td><td class="r num">${money(q*num(c.pu))}</td><td class="r num">${money(e*num(c.pu))}</td></tr>`}).join('');
   return `<div class="card"><div class="card-b" style="padding-top:18px">${sum}</div></div>
-  <div class="card"><div class="card-h"><h2>Catálogo de conceptos</h2><div class="row">${isAdmin()?`<button class="btn sm" data-act="newConc">${ic('plus')}Concepto</button>`:''}</div></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px">${chips([['','Todos'],['near','Por terminar'],['bad','Excedidos'],['ok','Terminados'],['off','Sin avance']])}${leg}
-    ${base.length?(rows?`<div class="tbl-wrap"><table class="ctbl">${head}<tbody>${rows}</tbody></table></div>`:empty('Ningún concepto con ese filtro.')):empty(isAdmin()?'Aún no hay catálogo. Agrega los conceptos por partida y subpartida.':'Aún no se ha cargado el catálogo de esta obra.',isAdmin()?'newConc':'',isAdmin()?'Agregar concepto':'')}
+  <div class="card"><div class="card-h"><h2>Catálogo de conceptos</h2><div class="row">${canCat()?`<button class="btn sm" data-act="newConc">${ic('plus')}Concepto</button>`:''}</div></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px">${chips([['','Todos'],['near','Por terminar'],['bad','Excedidos'],['ok','Terminados'],['off','Sin avance']])}${leg}
+    ${base.length?(rows?`<div class="tbl-wrap"><table class="ctbl">${head}<tbody>${rows}</tbody></table></div>`:empty('Ningún concepto con ese filtro.')):empty(canCat()?'Aún no hay catálogo. Agrega los conceptos por partida y subpartida.':'Aún no se ha cargado el catálogo de esta obra.',canCat()?'newConc':'',canCat()?'Agregar concepto':'')}
     <p class="note" style="margin:0">Toca un concepto para ver su historial o registrar avance. El porcentaje de partidas y subpartidas se calcula por importe.</p></div></div>
   <div class="card"><div class="card-h"><h2>Precios extraordinarios</h2>${canCreate('conceptos')?`<button class="btn sm" data-act="newExt">${ic('plus')}Precio extraordinario</button>`:''}</div><div class="card-b">${ex.length?`<div class="tbl-wrap"><table class="ctbl"><thead><tr><th>Clave</th><th>Descripción</th><th>Estado</th><th>Avance</th><th>Unidad</th><th class="r">Cantidad</th><th class="r">P.U.</th><th class="r">Importe</th><th class="r">Importe ejecutado</th></tr></thead><tbody>${exRows}</tbody></table></div>`:'<div class="empty">Sin precios extraordinarios.</div>'}<p class="note" style="margin:8px 0 0">Supervisión puede proponerlos; los autoriza Infraestructura. Solo los autorizados cuentan en los totales y pueden recibir avance.</p></div></div>`}
 function showConc(c){if(!c)return;const e=ejecDe(c.id),q=num(c.cantidad),p=pctOf(e,q);const hs=D.avconc.filter(a=>a.conceptoId===c.id).sort((a,b)=>a.fecha<b.fecha?-1:1);let acc=0;
@@ -1194,7 +1195,7 @@ const ACT={
   logoDel:()=>{const F={...fmtImp(),id:'formato'};F.logo='';put('ajustes',F);logoBuf=null;render();toast('Logo quitado')},
   printMin:()=>{const b=document.querySelector('[data-act="printMin"]');const m=b&&byId('minutas',b.dataset.min);if(m)previewMinuta(m)},
   doPrint:()=>{const b=document.querySelector('[data-act="doPrint"]');const m=b&&byId('minutas',b.dataset.min);if(m)printMinuta(m)},
-  newConc:()=>{if(!isAdmin()||!needObra())return;formConc(null,false)},
+  newConc:()=>{if(!canCat()||!needObra())return;formConc(null,false)},
   newExt:()=>{if(!canCreate('conceptos')||!needObra())return;formConc(null,true)},
   pvPdf:()=>pdfDoc(),
   pvPrint:()=>printDoc(),
