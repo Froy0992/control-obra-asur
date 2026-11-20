@@ -221,6 +221,8 @@ td.r,th.r{text-align:right}
 .pv{display:flex;gap:8px;flex-wrap:wrap}
 .pv img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .pv-it{position:relative;display:inline-block}
+.err-box{background:color-mix(in srgb,var(--bad) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:8px;padding:10px 12px}
+.err-box .note{font-weight:600;font-size:14px}
 .pv-x{all:unset;cursor:pointer;position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;background:var(--ink2,#333);color:#fff;font-size:12px;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .ph-btn{cursor:pointer;flex:1 1 140px;justify-content:center;white-space:nowrap}
 .x{all:unset;cursor:pointer;width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
@@ -513,6 +515,27 @@ const ofObra=(col,id)=>id?D[col].filter(x=>x.obraId===id):D[col];
 const convDe=id=>D.convenios.filter(c=>c.obraId===id);
 const vigente=o=>num(o.monto)+convDe(o.id).reduce((a,c)=>a+num(c.monto),0);
 const finVig=o=>addDays(o.fin,convDe(o.id).reduce((a,c)=>a+num(c.dias),0));
+/* Coherencia de fechas de una estimación: devuelve el primer problema o '' */
+function checkEst(e){const o=byId('obras',e.obraId)||{};const hoy=HOY();const ini=e.periodoIni,fin=e.periodoFin,pres=e.fechaPres,pago=e.fechaPago;
+  if(ini&&fin&&ini>fin)return 'El periodo inicia después de terminar: revisa "Periodo del" y "Periodo al".';
+  if(o.inicio&&ini&&ini<o.inicio)return `El periodo no puede iniciar antes del inicio del contrato (${fD(o.inicio)}).`;
+  const fv=o.fin?finVig(o):'';if(fv&&fin&&fin>fv)return `El periodo termina después del término vigente del contrato (${fD(fv)}). Si hay ampliación de plazo, registra primero el convenio.`;
+  if(fin&&fin>hoy)return 'El periodo no puede terminar en una fecha futura.';
+  if(pres&&fin&&pres<fin)return `La fecha de presentación (${fD(pres)}) no puede ser anterior al cierre del periodo (${fD(fin)}).`;
+  if(pres&&pres>hoy)return 'La fecha de presentación no puede ser futura.';
+  if(pago&&!pres)return 'Captura la fecha de presentación antes de la de pago.';
+  if(pago&&pres&&pago<pres)return `La fecha de pago (${fD(pago)}) no puede ser anterior a la presentación (${fD(pres)}).`;
+  if(pago&&pago>hoy)return 'La fecha de pago no puede ser futura.';
+  if(e.estado==='pagada'&&!pago)return 'Para marcarla como pagada, captura la fecha de pago.';
+  if(pago&&e.estado!=='pagada')return 'Tiene fecha de pago: cambia el estado a "Pagada" o borra la fecha.';
+  if(['revision','autorizada'].includes(e.estado)&&!pres)return 'Captura la fecha de presentación para ponerla en revisión o autorizarla.';
+  const otras=S.estimaciones.filter(x=>x.obraId===e.obraId&&x.id!==e.id&&!x.deleted);
+  if(otras.some(x=>num(x.numero)===num(e.numero)))return `Ya existe la estimación ${e.numero} en esta obra.`;
+  for(const x of otras.filter(x=>x.estado!=='devuelta'&&x.periodoFin)){const xi=x.periodoIni||x.periodoFin;
+    if(ini<=x.periodoFin&&fin>=xi)return `El periodo se empalma con la estimación ${x.numero} (${fD(xi)} – ${fD(x.periodoFin)}).`;
+    if(num(x.numero)<num(e.numero)&&xi>fin)return `La estimación ${x.numero} es anterior pero su periodo es posterior (${fD(xi)}). Revisa el número o las fechas.`;
+    if(num(x.numero)>num(e.numero)&&x.periodoFin<ini)return `La estimación ${x.numero} es posterior pero su periodo es anterior (${fD(x.periodoFin)}). Revisa el número o las fechas.`}
+  return ''}
 function calcEst(e){const o=byId('obras',e.obraId)||{};const imp=num(e.importe);const am=e.amort!==''&&e.amort!=null?num(e.amort):imp*num(o.anticipo)/100;const iva=(imp-am)*IVA;const neto=imp-am+iva-num(e.retenciones)-num(e.penas);return{imp,am,iva,neto}}
 const cortesDe=id=>D.avances.filter(a=>a.obraId===id).sort((a,b)=>a.fecha<b.fecha?-1:1);
 function resumen(o){
@@ -547,13 +570,13 @@ function seed(){
   OB.forEach(([id,numero,nombre,aero,tipo,ctta,sup,res,monto,ant,a,b,est,cortes])=>{
     const inicio=off(a),fin=off(b);
     S.obras.push({id,numero,nombre,aeropuerto:aero,tipo,contratista:ctta,supervision:sup,residente:res,monto,anticipo:ant,inicio,fin,estado:est,notas:'',ejemplo:true});
-    const span=dayDiff(inicio,b<0?fin:HOY());let prev=0;
+    const span=dayDiff(inicio,b<0?fin:addDays(HOY(),-5));let prev=0,pIni=inicio;
     cortes.forEach(([p,r],i)=>{const f=addDays(inicio,Math.round(span*(i+1)/cortes.length));S.avances.push({id:id+'a'+i,obraId:id,fecha:f,programado:p,real:r,nota:i===cortes.length-1?'Corte del periodo con supervisión.':''});
       const imp=Math.round(monto*(r-prev)/100);prev=r;const last=i===cortes.length-1;
-      S.estimaciones.push({id:id+'e'+i,obraId:id,numero:i+1,periodoIni:addDays(f,-Math.round(span/cortes.length)+1),periodoFin:f,importe:imp,amort:'',retenciones:Math.round(imp*0.005),penas:0,estado:last&&est!=='terminada'?'revision':(i===cortes.length-2&&est!=='terminada'?'autorizada':'pagada'),fechaPres:addDays(f,3),fechaPago:'',notas:''});
+      S.estimaciones.push({id:id+'e'+i,obraId:id,numero:i+1,periodoIni:pIni,periodoFin:f,importe:imp,amort:'',retenciones:Math.round(imp*0.005),penas:0,estado:last&&est!=='terminada'?'revision':(i===cortes.length-2&&est!=='terminada'?'autorizada':'pagada'),fechaPres:addDays(f,3),fechaPago:'',notas:''});pIni=addDays(f,1);
     });
   });
-  S.estimaciones.forEach(e=>{if(e.estado==='pagada')e.fechaPago=addDays(e.periodoFin,28)});
+  S.estimaciones.forEach(e=>{if(e.estado==='pagada'){const pg=addDays(e.periodoFin,28);e.fechaPago=pg>HOY()?HOY():pg}});
   S.convenios.push({id:'cv1',obraId:'o1',numero:'CM-01',fecha:off(-40),tipo:'Monto y plazo',monto:6200000,dias:30,descripcion:'Conceptos extraordinarios por sustitución de base hidráulica en cabecera 30L.'});
   S.convenios.push({id:'cv2',obraId:'o3',numero:'CM-01',fecha:off(-15),tipo:'Plazo',monto:0,dias:45,descripcion:'Ampliación de plazo por entrega tardía de cancelería importada.'});
   const P=[['o1','Entregar números generadores de la estimación 5','Pavimentos del Sureste',-3,'alta','pendiente'],['o1','Resultados de laboratorio de compactación tramo 0+800 a 1+200','Supervisión',4,'alta','proceso'],['o1','Programa de cierres nocturnos de pista para diciembre','Residencia',9,'media','pendiente'],['o2','Liberar frente norte de plataforma (reubicar GSE)','Operaciones',-6,'alta','pendiente'],['o2','Visto bueno de diseño de mezcla MR-45','Supervisión',6,'media','proceso'],['o3','Muestras de acabados para aprobación','Edificaciones Caribe',2,'media','pendiente'],['o3','Programa reprogramado por convenio CM-01','Edificaciones Caribe',-1,'alta','pendiente'],['o4','Integrar expediente de finiquito','Residencia',12,'media','proceso'],['o4','Acta de entrega-recepción','Residencia',-20,'alta','cerrada']];
@@ -930,7 +953,7 @@ const obraOpts=()=>D.obras.map(o=>[o.id,(o.aeropuerto?o.aeropuerto+' · ':'')+o.
 const FORMS={
   obras:{t:'Obra',f:[['numero','No. de contrato','text',1],['tipo','Tipo','select',0,['Obra','Supervisión','Proyecto ejecutivo','Servicios']],['nombre','Nombre de la obra','text',1,null,1],['aeropuerto','Aeropuerto','list',0,AEROS],['estado','Estado','select',0,Object.entries(OB_EST).map(([k,v])=>[k,v[0]])],['contratista','Contratista','text'],['supervision','Supervisión externa','text'],['residente','Residente de obra','text'],['monto','Monto del contrato (sin IVA)','money',1],['anticipo','Anticipo (%)','number'],['inicio','Fecha de inicio','date',1],['fin','Fecha de término','date',1],['notas','Notas','textarea',0,null,1]]},
   convenios:{t:'Convenio modificatorio',f:[['obraId','Obra','obra',1,null,1],['numero','Número','text',1],['fecha','Fecha','date',1],['tipo','Tipo','select',0,['Monto','Plazo','Monto y plazo','Reducción']],['monto','Monto (sin IVA, negativo si reduce)','money'],['dias','Días de ampliación','number'],['descripcion','Motivo','textarea',0,null,1]]},
-  estimaciones:{t:'Estimación',f:[['obraId','Obra','obra',1,null,1],['numero','No. de estimación','number',1],['estado','Estado','select',0,Object.entries(ES_EST).map(([k,v])=>[k,v[0]])],['periodoIni','Periodo del','date'],['periodoFin','Periodo al','date',1],['importe','Importe ejecutado (sin IVA)','money',1],['amort','Amortización de anticipo','money',0,null,0,'Vacío = se calcula con el % de anticipo'],['retenciones','Retenciones','money'],['penas','Penas convencionales','money'],['fechaPres','Fecha de presentación','date'],['fechaPago','Fecha de pago','date'],['notas','Observaciones','textarea',0,null,1]]},
+  estimaciones:{t:'Estimación',f:[['obraId','Obra','obra',1,null,1],['numero','No. de estimación','number',1],['estado','Estado','select',0,Object.entries(ES_EST).map(([k,v])=>[k,v[0]])],['periodoIni','Periodo del','date',1],['periodoFin','Periodo al','date',1],['importe','Importe ejecutado (sin IVA)','money',1],['amort','Amortización de anticipo','money',0,null,0,'Vacío = se calcula con el % de anticipo'],['retenciones','Retenciones','money'],['penas','Penas convencionales','money'],['fechaPres','Fecha de presentación','date'],['fechaPago','Fecha de pago','date'],['notas','Observaciones','textarea',0,null,1]]},
   avances:{t:'Corte de avance',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha de corte','date',1],['programado','Avance programado acumulado (%)','number',1],['real','Avance físico real acumulado (%)','number',1],['nota','Nota','textarea',0,null,1]]},
   pendientes:{t:'Pendiente',f:[['obraId','Obra','obra',1,null,1],['titulo','Actividad o acuerdo','text',1,null,1],['responsable','Responsable','text'],['compromiso','Fecha compromiso','date'],['prioridad','Prioridad','select',0,Object.entries(PRIO).map(([k,v])=>[k,v[0]])],['estado','Estado','select',0,Object.entries(PE_EST).map(([k,v])=>[k,v[0]])],['notas','Notas','textarea',0,null,1]]},
   minutas:{t:'Minuta',f:[['obraId','Obra','obra',1,null,1],['titulo','Asunto de la reunión','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['lugar','Lugar','text'],['asistentes','Asistentes','asist',0,null,1],['temas','Temas tratados','textarea',0,null,1]]},
@@ -962,12 +985,13 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
     F.f.forEach(([k,l,t,req,,,,when])=>{if(when&&String(form.elements[when[0]]?.value)!==when[1]){delete out[k];return}if(t==='asist'){out.asistentes=[...form.querySelectorAll('.as-row')].map(r=>({nombre:r.querySelector('[data-k=nombre]').value.trim(),cargo:r.querySelector('[data-k=cargo]').value.trim(),empresa:r.querySelector('[data-k=empresa]').value.trim()})).filter(a=>a.nombre);return}if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
     if(form.elements.acuerdos){out._acuerdos=form.elements.acuerdos.value;out._resp=form.elements.acResp.value;out._fecha=form.elements.acFecha.value}
     if(miss.length){$('#frmErr').textContent='Falta: '+miss.join(', ');return}
+    if(col==='estimaciones'){const m=checkEst(out);if(m){const er=$('#frmErr');er.textContent='⚠ '+m;er.closest('.fld').classList.add('err-box');try{er.scrollIntoView({block:'center',behavior:'smooth'})}catch(_){}return}}
     if(col==='bitacora'&&out.tipo==='Respuesta'&&!notaFolio(out.obraId,out.respondeA)){$('#frmErr').textContent='No existe una nota aprobada con el número '+out.respondeA+' en esta obra.';return}
     if(fileBuf){out.archivo=fileBuf.name;out.mime=fileBuf.type;out.size=fileBuf.size;out.ruta='';out._blob=fileBuf}
     closeModal();onSave(out)};
   const syncWhen=()=>form.querySelectorAll('[data-when]').forEach(w=>{const[a,b]=w.dataset.when.split('=');w.hidden=String(form.elements[a]?.value)!==b});
   const refHint=()=>{const h=$('#f-respondeA-h');if(!h||!form.elements.respondeA)return;const n=form.elements.respondeA.value.trim();const r=n&&notaFolio(form.elements.obraId?.value||o.obraId,n);h.innerHTML=!n?'Escribe el número (folio) de la nota que contestas.':r?`<b>Nota ${r.folio} · ${esc(r.tipo)}</b> (${fD(r.fecha)}): ${esc(String(r.texto||'').slice(0,110))}${String(r.texto||'').length>110?'…':''}`:'<span style="color:var(--bad)">No hay nota aprobada con ese número en esta obra.</span>'};
-  form.addEventListener('change',()=>{syncWhen();refHint()});form.addEventListener('input',e=>{$('#frmErr').textContent='';if(e.target.name==='respondeA')refHint()});refHint();
+  form.addEventListener('change',()=>{syncWhen();refHint()});form.addEventListener('input',e=>{$('#frmErr').textContent='';$('#frmErr').closest('.fld').classList.remove('err-box');if(e.target.name==='respondeA')refHint()});refHint();
   const d=$('#frmDel');if(d)d.onclick=()=>{if(d.dataset.sure){closeModal();onSave(null)}else{d.dataset.sure=1;d.textContent='Toca otra vez para eliminar'}};
   setTimeout(()=>{const f=form.querySelector('input:not([type=file]),textarea');if(f&&matchMedia('(min-width:861px)').matches)f.focus()},30)}
 function closeModal(){$('#modalRoot').innerHTML=''}
@@ -993,7 +1017,7 @@ const ACT={
   newObra:()=>isAdmin()&&openForm('obras',{tipo:'Obra',estado:'ejecucion',anticipo:30,inicio:HOY()},o=>{o.id=uid();put('obras',o);go('obras',o.id);toast('Obra registrada')}),
   editObra:()=>editRec('obras',V.id),
   newConv:()=>openForm('convenios',{obraId:curObra(),fecha:HOY(),tipo:'Monto y plazo',numero:'CM-0'+(convDe(curObra()).length+1)},saver('convenios','Convenio registrado; monto y término actualizados')),
-  newEst:()=>{if(!needObra())return;const ob=curObra();openForm('estimaciones',{obraId:ob,numero:Math.max(0,...ofObra('estimaciones',ob).map(e=>num(e.numero)))+1,estado:'integracion',periodoFin:HOY(),amort:'',retenciones:'',penas:''},saver('estimaciones','Estimación registrada'))},
+  newEst:()=>{if(!needObra())return;const ob=curObra();const prev=ofObra('estimaciones',ob).filter(e=>e.estado!=='devuelta'&&e.periodoFin).sort((a,b)=>a.periodoFin<b.periodoFin?1:-1)[0];const o0=byId('obras',ob)||{};openForm('estimaciones',{obraId:ob,numero:Math.max(0,...ofObra('estimaciones',ob).map(e=>num(e.numero)))+1,estado:'integracion',periodoIni:prev?addDays(prev.periodoFin,1):(o0.inicio||''),periodoFin:HOY(),amort:'',retenciones:'',penas:''},saver('estimaciones','Estimación registrada'))},
   newAv:()=>{if(!needObra())return;const ob=curObra();const l=cortesDe(ob).slice(-1)[0]||{};openForm('avances',{obraId:ob,fecha:HOY(),programado:l.programado||'',real:l.real||''},saver('avances','Corte registrado'))},
   newPen:()=>{if(!needObra())return;openForm('pendientes',{obraId:curObra(),prioridad:'media',estado:'pendiente',origen:'actividad',compromiso:addDays(HOY(),7)},saver('pendientes','Pendiente agregado'))},
   newMin:()=>{if(!needObra())return;openForm('minutas',{obraId:curObra(),fecha:isoT(new Date())},saver('minutas','Minuta guardada'),'Nueva minuta',`<div class="fld full"><label for="f-acuerdos">Acuerdos (uno por renglón)</label><textarea id="f-acuerdos" name="acuerdos" placeholder="Entregar programa de recuperación&#10;Liberar frente norte"></textarea><span class="hint">Cada acuerdo se agrega a Pendientes para darle seguimiento.</span></div><div class="fld"><label for="f-acResp">Responsable de los acuerdos</label><input id="f-acResp" name="acResp"></div><div class="fld"><label for="f-acFecha">Fecha compromiso</label><input id="f-acFecha" name="acFecha" type="date" value="${addDays(HOY(),7)}"></div>`)},
