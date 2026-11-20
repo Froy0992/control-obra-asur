@@ -708,7 +708,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v20';
+const APP_VER='20-nov-2026 · v21';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -759,7 +759,7 @@ function apFecha(id,acc){const x=byId('estimaciones',id);if(!x||!isAdmin())retur
   if(acc==='ok'){put('estimaciones',{...x,aprobFecha:'aprobada',aprobPor:U.nombre,aprobEl:new Date().toISOString(),aprobNota:''},'aprobó fecha');render();toast('Fechas aprobadas: la estimación ya cuenta en los acumulados');return}
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:480px"><div class="mh"><h2>Rechazar fechas de la estimación ${esc(x.numero)}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr"><div class="fld"><label for="apNota">Motivo (lo verá quien la capturó)</label><textarea id="apNota"></textarea></div><span class="note" id="apErr" style="color:var(--bad)"></span></div><div class="mf"><button class="btn" data-close="1">Cancelar</button><button class="btn danger" id="apNo">Rechazar</button></div></div></div>`;
   $('#apNo').onclick=()=>{const n=$('#apNota').value.trim();if(!n){$('#apErr').textContent='Escribe el motivo.';return}put('estimaciones',{...x,aprobFecha:'rechazada',estado:'devuelta',aprobPor:U.nombre,aprobEl:new Date().toISOString(),aprobNota:n},'rechazó fecha');closeModal();render();toast('Estimación devuelta')}}
-/* Niveles: 1 gerente y coordinador de infraestructura; 2 supervisión y coordinador de obra; 3 contratista */
+/* Niveles: 1 Infraestructura; 2 Supervisión; 3 Contratista */
 const nivel=u=>!u?9:NIVEL_ROL[u.rol]||3;
 const PE_HECHO=['porSup','porAdm'];
 const allUsers=()=>S.sync.on&&S.sync.url?Sync.perfiles.map(x=>({id:x.email,nombre:x.nombre,rol:x.rol,obraId:x.obra_id||''})):S.usuarios;
@@ -962,7 +962,7 @@ config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfi
     <div class="fld"><label for="fmtCod">Código del formato (opcional)</label><input id="fmtCod" name="codigo" value="${esc(F.codigo||'')}"></div>
   </div><div class="mf" style="padding:12px 0 0;border:0">${F.logo?`<button type="button" class="btn" data-act="logoDel">Quitar logo</button>`:''}<button class="btn pri">Guardar formato</button></div></form></div></div>`})():''}
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Usuarios y permisos</h2><button class="btn sm" data-act="newUser">${ic('plus')}Agregar usuario</button></div><div class="card-b">
-    <p class="note" style="margin-top:0;max-width:80ch">Gerente y coordinador de infraestructura ven todo y aprueban la bitácora. El coordinador de obra ve y modifica solo su contrato. Contratista y coordinador de supervisión suben notas de bitácora y consultan el avance y las estimaciones de su contrato; supervisión además carga el avance físico y financiero y las estimaciones. Solo las notas del gerente y del coordinador de infraestructura se aprueban directo. Solo ustedes dos pueden crear usuarios, asignar contraseñas y cambiar permisos.</p>
+    <p class="note" style="margin-top:0;max-width:80ch">Hay tres niveles. <b>1. Infraestructura</b> (coordinador regional y gerente regional): ven todo, aprueban y son los únicos que crean usuarios, asignan contraseñas, cambian permisos y sacan informes. <b>2. Supervisión</b> (coordinador de supervisión y supervisor de obra): ven su obra, cargan avance y estimaciones, dan visto bueno a los pendientes del contratista y suben notas de bitácora. <b>3. Contratista</b> (superintendente y residente de obra): consultan su obra, marcan sus pendientes y suben notas de bitácora. Supervisión y contratista ven y descargan documentos y minutas, sin editarlos.</p>
     <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Contrato</th><th>${cl?'Correo':'Usuario'}</th><th></th></tr></thead><tbody>${users.map(u=>`<tr class="click" data-user="${esc(u.id)}"><td><b>${esc(u.nombre)}</b></td><td>${esc(ROLES[u.rol]||u.rol)}</td><td>${u.obraId?esc(obraCorto(u.obraId)):'Todos'}</td><td class="num">${esc(cl?u.email:(u.usuario||''))}</td><td class="r">${ic('edit','width="16" height="16"')}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}
   ${isAdmin()||!cl?`<div class="card"><div class="card-h"><h2>Sincronización en tiempo real</h2>${stPill()}</div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
     <p style="margin:0;max-width:70ch">Conecta la app a un proyecto gratuito de Supabase para que todo tu equipo vea los mismos avances, estimaciones, pendientes y evidencias al momento. Sin señal se sigue capturando y se sube solo al regresar la conexión.</p>
