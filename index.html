@@ -224,6 +224,13 @@ td.r,th.r{text-align:right}
 .err-box{background:color-mix(in srgb,var(--bad) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:8px;padding:10px 12px}
 .err-box .note{font-size:14px}
 .err-ov{z-index:80}
+.pm h3{font-size:12.5px;margin:12px 0 4px;color:#333}
+.pm .hi-res{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.pm .hi-ch{font-size:10px;color:#555;margin-top:3px}
+.pm .inf-ob{border-top:2px solid #333;padding-top:8px;margin-top:18px}
+.pm .inf-res td{text-align:center;font-size:18px;font-weight:700}.pm .inf-res th{text-align:center}
+.pm .inf-obs{border:1px solid #bbb;height:70px;border-radius:4px}
+.pm .inf-fir{margin-top:28px}.pm .inf-fir td{border:none;text-align:center;width:33%;padding-top:30px}.pm .inf-l{border-top:1px solid #333;margin:0 14px 4px}
 .err-pop{max-width:520px}
 .err-pop .err-pb{padding:14px 20px;overflow:auto;display:flex;flex-direction:column;gap:8px}
 .err-pop .err-pb p{margin:0}
@@ -701,7 +708,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v18';
+const APP_VER='20-nov-2026 · v19';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -853,7 +860,7 @@ function sCurve(o){const cs=cortesDe(o.id);if(!cs.length)return `<div class="emp
     <line class="hx" x1="0" x2="0" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>
     <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="transparent" class="hit"/></svg>
     <div class="tip" hidden></div>
-    <div class="legend"><span><i style="background:var(--teal)"></i>Físico real</span><span><i style="background:var(--ink2)"></i>Programado</span><span><i style="background:var(--info)"></i>Financiero (estimado)</span></div><p class="note" style="margin:6px 0 0">Un punto por quincena (día 15 y fin de mes). Punto hueco: esa quincena no tiene corte y se repite el último.</p></div>`}
+    <div class="legend"><span><i style="background:var(--teal)"></i>Físico real</span><span><i style="background:var(--ink2)"></i>Programado</span><span><i style="background:var(--info)"></i>Financiero (estimado)</span></div><p class="note" style="margin:6px 0 0">Un punto por quincena (día 15 y fin de mes) con el último corte de esa quincena. Punto hueco: la quincena no tiene corte y se repite el anterior.</p></div>`}
 function bindCharts(){document.querySelectorAll('[data-chart]').forEach(box=>{const c=CH[box.dataset.chart];if(!c)return;const svg=box.querySelector('svg'),hx=svg.querySelector('.hx'),tip=box.querySelector('.tip');
   const mv=ev=>{const r=svg.getBoundingClientRect();const k=c.W/r.width;const x=((ev.touches?ev.touches[0].clientX:ev.clientX)-r.left)*k;let best=c.pts[0],bd=1e9;c.pts.forEach(q=>{const d=Math.abs(c.X(q.fecha)-x);if(d<bd){bd=d;best=q}});
     const px=c.X(best.fecha);hx.setAttribute('x1',px);hx.setAttribute('x2',px);hx.setAttribute('visibility','visible');
@@ -904,7 +911,7 @@ estimaciones(){const obs=D.obras.filter(o=>!V.obra||o.id===V.obra);const rs=obs.
   <div class="card"><div class="card-h"><h2>Estimaciones</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">${chips([['','Todas'],...Object.entries(ES_EST).map(([k,v])=>[k,v[0]])])}${estTable(es,!V.obra)}</div></div>`},
 
 pendientes(){const it=D.pendientes.filter(p=>(!V.obra||p.obraId===V.obra)&&(V.f==='acuerdo'?p.origen==='acuerdo':V.f==='actividad'?p.origen!=='acuerdo':V.f==='vencido'?vencido(p):V.f==='cerrada'?p.estado==='cerrada':V.f==='porap'?PE_HECHO.includes(p.estado):p.estado!=='cerrada'));
-  return `${phead('Pendientes y acuerdos','Actividades por cerrar y acuerdos que salen de las minutas',obraSel()+(canCreate('pendientes')?`<button class="btn pri hide-m" data-act="newPen">${ic('plus')}Nuevo pendiente</button>`:''))}${apPenCard()}
+  return `${phead('Pendientes y acuerdos','Actividades por cerrar y acuerdos que salen de las minutas',obraSel()+`<button class="btn" data-act="informe">${ic('file')}Informe semanal</button>`+(canCreate('pendientes')?`<button class="btn pri hide-m" data-act="newPen">${ic('plus')}Nuevo pendiente</button>`:''))}${apPenCard()}
   ${chips([['','Abiertos'],['porap','Por aprobar'],['vencido','Vencidos'],['actividad','Actividades'],['acuerdo','Acuerdos de minuta'],['cerrada','Cerrados']])}
   <div class="card"><div class="card-b" style="padding-top:8px">${penList(sortPen(it),!V.obra)}</div></div>`},
 
@@ -912,7 +919,7 @@ minutas(){const it=ofObra('minutas',V.obra);return `${phead('Minutas','Reuniones
 
 bitacora(){const it=ofObra('bitacora',V.obra).filter(b=>!V.f||(V.f==='pend'?['cargada','revision'].includes(b.estado):(b.estado||'aprobada')===V.f));return `${phead('Bitácora',isAdmin()?'El folio se asigna al aprobar la nota':'Tus notas quedan como cargadas hasta que el coordinador de infraestructura las apruebe',obraSel()+`<button class="btn pri hide-m" data-act="newBit">${ic('plus')}Nueva nota</button>`)}${chips([['','Todas'],['pend','Por aprobar'],['aprobada','Aprobadas'],['rechazada','Rechazadas']])}<div class="card"><div class="card-b" style="padding-top:8px">${bitList(it,!V.obra)}</div></div>`},
 
-historial(){const it=ofObra('historial',V.obra);return `${phead('Historial de movimientos','Quién creó, modificó, aprobó o eliminó información en cada contrato',obraSel())}<div class="card"><div class="card-b" style="padding-top:8px">${histList(it,!V.obra)}</div></div>`},
+historial(){const it=ofObra('historial',V.obra);return `${phead('Historial de movimientos','Quién creó, modificó, aprobó o eliminó información en cada contrato',obraSel()+`<button class="btn" data-act="infHist">${ic('file')}Informe de movimientos</button>`)}<div class="card"><div class="card-b" style="padding-top:8px">${histList(it,!V.obra)}</div></div>`},
 
 cambiaPw(){return `<div style="max-width:440px;margin:6vh auto 0;width:100%"><div class="card"><div class="card-h"><h2>${U&&U._vol?'Cambia tu contraseña':'Crea tu contraseña'}</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
   <p class="note" style="margin:0">${U&&U._vol?'Escribe tu nueva contraseña.':`Hola ${esc(U?U.nombre:'')}. Entraste con una contraseña temporal; escribe una nueva que solo tú conozcas.`}</p>
@@ -1006,7 +1013,7 @@ const FORMS={
   obras:{t:'Obra',f:[['numero','No. de contrato','text',1],['tipo','Tipo','select',0,['Obra','Supervisión','Proyecto ejecutivo','Servicios']],['nombre','Nombre de la obra','text',1,null,1],['aeropuerto','Aeropuerto','list',0,AEROS],['estado','Estado','select',0,Object.entries(OB_EST).map(([k,v])=>[k,v[0]])],['contratista','Contratista','text'],['supervision','Supervisión externa','text'],['residente','Residente de obra','text'],['monto','Monto del contrato (sin IVA)','money',1],['anticipo','Anticipo (%)','number'],['inicio','Fecha de inicio','date',1],['fin','Fecha de término','date',1],['notas','Notas','textarea',0,null,1]]},
   convenios:{t:'Convenio modificatorio',f:[['obraId','Obra','obra',1,null,1],['numero','Número','text',1],['fecha','Fecha','date',1],['tipo','Tipo','select',0,['Monto','Plazo','Monto y plazo','Reducción']],['monto','Monto (sin IVA, negativo si reduce)','money'],['dias','Días de ampliación','number'],['descripcion','Motivo','textarea',0,null,1]]},
   estimaciones:{t:'Estimación',f:[['obraId','Obra','obra',1,null,1],['numero','No. de estimación','number',1],['estado','Estado','select',0,Object.entries(ES_EST).map(([k,v])=>[k,v[0]])],['periodoIni','Periodo del','date',1],['periodoFin','Periodo al','date',1],['importe','Importe ejecutado (sin IVA)','money',1],['amort','Amortización de anticipo','money',0,null,0,'Vacío = se calcula con el % de anticipo'],['retenciones','Retenciones','money'],['penas','Penas convencionales','money'],['fechaPres','Fecha de presentación','date'],['fechaPago','Fecha de pago','date'],['notas','Observaciones','textarea',0,null,1]]},
-  avances:{t:'Corte de avance',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha de corte','date',1,null,0,'Corte quincenal: día 15 o último día del mes.'],['programado','Avance programado acumulado (%)','number',1],['real','Avance físico real acumulado (%)','number',1],['nota','Nota','textarea',0,null,1]]},
+  avances:{t:'Corte de avance',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha de corte','date',1,null,0,'Hasta dos cortes por quincena (por ejemplo, a medio periodo y al día 15 o fin de mes).'],['programado','Avance programado acumulado (%)','number',1],['real','Avance físico real acumulado (%)','number',1],['nota','Nota','textarea',0,null,1]]},
   pendientes:{t:'Pendiente',f:[['obraId','Obra','obra',1,null,1],['titulo','Actividad o acuerdo','text',1,null,1],['asignadoId','Asignado a (usuario que lo marcará como hecho)','user',0,null,1],['responsable','Responsable externo (si no tiene usuario)','text'],['compromiso','Fecha compromiso','date'],['prioridad','Prioridad','select',0,Object.entries(PRIO).map(([k,v])=>[k,v[0]])],['estado','Estado','select',0,Object.entries(PE_EST).map(([k,v])=>[k,v[0]])],['notas','Notas','textarea',0,null,1]]},
   minutas:{t:'Minuta',f:[['obraId','Obra','obra',1,null,1],['titulo','Asunto de la reunión','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['lugar','Lugar','text'],['asistentes','Asistentes','asist',0,null,1],['temas','Temas tratados','textarea',0,null,1]]},
   bitacora:{t:'Nota de bitácora',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha y hora','datetime-local',1],['tipo','Tipo de nota','select',0,BIT_T],['respondeA','Responde a la nota No.','number',1,null,0,'Escribe el número (folio) de la nota que contestas.',['tipo','Respuesta']],['texto','Descripción','textarea',1,null,1],['fotos','Fotos (máximo 4)','photos',0,4,1]]},
@@ -1050,7 +1057,8 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
       if(r.fut.length){if(isAdmin()){out.aprobFecha='aprobada';out.aprobPor=U.nombre;out.aprobEl=new Date().toISOString();out.aprobKey=key;out._apMsg='Guardada. Como tiene fechas posteriores a hoy, quedó aprobada por ti.'}
         else if(!(o.aprobFecha==='aprobada'&&o.aprobKey===key)){out.aprobFecha='pendiente';out.aprobKey=key;out.aprobMotivo='Fechas posteriores a hoy: '+r.fut.join(' y ')+'.';out.aprobPor='';out.aprobNota='';out._apMsg='Guardada y enviada a aprobación: tiene fechas posteriores a hoy. La puede aprobar Infraestructura (gerente o coordinador regional).'}}
       else if(out.aprobFecha){out.aprobFecha='';out.aprobKey='';out.aprobMotivo=''}}
-    if(col==='avances'&&out.fecha){const dup=S.avances.find(a=>a.obraId===out.obraId&&a.id!==out.id&&!a.deleted&&qFin(a.fecha)===qFin(out.fecha));if(dup){$('#frmErr').textContent=`Ya hay un corte en la ${qLbl(out.fecha)} (${fD(dup.fecha)}). Edita ese corte en lugar de crear otro.`;return}}
+    if(col==='avances'&&out.fecha){const dup=S.avances.filter(a=>a.obraId===out.obraId&&a.id!==out.id&&!a.deleted&&qFin(a.fecha)===qFin(out.fecha));if(dup.length>=2){$('#frmErr').textContent=`La ${qLbl(out.fecha)} ya tiene dos cortes (${dup.map(a=>fD(a.fecha)).join(' y ')}). Edita uno de ellos en lugar de crear otro.`;return}
+      if(dup.some(a=>a.fecha===out.fecha)){$('#frmErr').textContent=`Ya hay un corte con fecha ${fD(out.fecha)}. Edita ese corte.`;return}}
     if(col==='bitacora'&&out.tipo==='Respuesta'&&!notaFolio(out.obraId,out.respondeA)){$('#frmErr').textContent='No existe una nota aprobada con el número '+out.respondeA+' en esta obra.';return}
     if(fileBuf){out.archivo=fileBuf.name;out.mime=fileBuf.type;out.size=fileBuf.size;out.ruta='';out._blob=fileBuf}
     closeModal();onSave(out)};
@@ -1101,6 +1109,10 @@ const ACT={
   logoDel:()=>{const F={...fmtImp(),id:'formato'};F.logo='';put('ajustes',F);logoBuf=null;render();toast('Logo quitado')},
   printMin:()=>{const b=document.querySelector('[data-act="printMin"]');const m=b&&byId('minutas',b.dataset.min);if(m)previewMinuta(m)},
   doPrint:()=>{const b=document.querySelector('[data-act="doPrint"]');const m=b&&byId('minutas',b.dataset.min);if(m)printMinuta(m)},
+  pvPdf:()=>pdfDoc(),
+  pvPrint:()=>printDoc(),
+  informe:()=>informeForm(),
+  infHist:()=>histForm(),
   pdfMin:()=>{const b=document.querySelector('[data-act="pdfMin"]');const m=b&&byId('minutas',b.dataset.min);if(m)pdfMinuta(m)},
   copySql:()=>{try{navigator.clipboard.writeText(SQL).then(()=>toast('Código copiado'),()=>selectSql())}catch(e){selectSql()}},
 };
@@ -1157,6 +1169,69 @@ function printMinuta(m){$('#printArea').innerHTML=minutaHTML(m);setTimeout(()=>{
 function previewMinuta(m){
   $('#modalRoot').innerHTML=`<div class="ov pv-ov"><div class="pv-box" role="dialog" aria-label="Vista previa de impresión"><div class="pv-bar"><b>Vista previa · hoja carta</b><span class="pv-sp"></span><button class="btn sm" data-close="1">${ic('close')}Cerrar</button><button class="btn sm" data-act="pdfMin" data-min="${m.id}">${ic('file')}Descargar PDF</button><button class="btn sm pri" data-act="doPrint" data-min="${m.id}">${ic('file')}Imprimir</button></div><div class="pv-scroll"><div class="pv-paper" id="pvPaper">${minutaHTML(m)}</div></div></div></div>`;
   fitPaper()}
+let PV=null;
+function previewDoc(html,name){PV={html,name};
+  $('#modalRoot').innerHTML=`<div class="ov pv-ov"><div class="pv-box" role="dialog" aria-label="Vista previa de impresión"><div class="pv-bar"><b>Vista previa · hoja carta</b><span class="pv-sp"></span><button class="btn sm" data-close="1">${ic('close')}Cerrar</button><button class="btn sm" data-act="pvPdf">${ic('file')}Descargar PDF</button><button class="btn sm pri" data-act="pvPrint">${ic('file')}Imprimir</button></div><div class="pv-scroll"><div class="pv-paper" id="pvPaper">${html}</div></div></div></div>`;
+  fitPaper()}
+function printDoc(){if(!PV)return;$('#printArea').innerHTML=PV.html;setTimeout(()=>{try{window.print()}catch(e){}if(inClaude)toast('La vista previa no permite imprimir. Usa la app instalada o tu enlace.')},150)}
+async function pdfDoc(){if(!PV)return;toast('Generando PDF…');
+  try{const h=await pdfLib();await h().set({margin:0,filename:PV.name,image:{type:'jpeg',quality:.96},html2canvas:{scale:2,backgroundColor:'#fff'},jsPDF:{unit:'in',format:'letter',orientation:'portrait'},pagebreak:{mode:['css','legacy'],avoid:['tr','h2']}}).from(`<div class="pv-paper" style="margin:0;box-shadow:none;transform:none">${PV.html}</div>`,'string').save();
+    if(inClaude)toast('La vista previa no permite descargar. Usa la app instalada o tu enlace.')}
+  catch(e){toast('Sin conexión para generar el PDF. En el cuadro de impresión elige “Guardar como PDF”.');setTimeout(printDoc,1200)}}
+/* ---------- Informe semanal de pendientes ---------- */
+const lunesDe=f=>{const d=toD(f);const k=(d.getDay()+6)%7;return addDays(f,-k)};
+const fechaAt=p=>String(p.hechoEl||p.upd||'').slice(0,10);
+function semanasOpts(){const out=[];let l=lunesDe(HOY());for(let i=0;i<12;i++){out.push([l,`${i===0?'Esta semana · ':i===1?'Semana pasada · ':''}${fD(l)} al ${fD(addDays(l,6))}`]);l=addDays(l,-7)}return out}
+function informeForm(){const ob=V.obra||'';
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:480px"><div class="mh"><h2>Informe semanal de pendientes</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr"><div class="fld"><label for="infSem">Semana (lunes a domingo)</label><select id="infSem">${semanasOpts().map(([v,l],i)=>`<option value="${v}" ${i===1?'selected':''}>${esc(l)}</option>`).join('')}</select></div><div class="fld"><label for="infObra">Obra</label><select id="infObra">${D.obras.length>1?'<option value="">Todas mis obras</option>':''}${D.obras.map(o=>`<option value="${o.id}" ${o.id===ob?'selected':''}>${esc(obraCorto(o.id))} · ${esc(o.nombre)}</option>`).join('')}</select></div><p class="note" style="margin:0">Muestra qué pendientes se atendieron en la semana y cuáles no, con vista previa para imprimir o descargar en PDF.</p></div><div class="mf"><button class="btn" data-close="1">Cancelar</button><button class="btn pri" id="infGo">${ic('file')}Ver informe</button></div></div></div>`;
+  $('#infGo').onclick=()=>{const l=$('#infSem').value,o=$('#infObra').value;const ob=byId('obras',o);previewDoc(informeHTML(l,o),`Informe semanal pendientes ${ob?ob.numero+' ':''}${l}.pdf`.replace(/[\/:*?"<>|]+/g,'-'))}}
+function informeHTML(ini,obraId){const fin=addDays(ini,6);const F=fmtImp();const obras=D.obras.filter(o=>!obraId||o.id===obraId);
+  const nom=p=>p.asignadoId?userNom(p.asignadoId):(p.responsable||'Sin asignar');
+  let tA=0,tP=0,tN=0;
+  const secs=obras.map(o=>{const ps=D.pendientes.filter(p=>p.obraId===o.id);
+    const at=ps.filter(p=>p.estado==='cerrada'&&fechaAt(p)>=ini&&fechaAt(p)<=fin);
+    const pa=ps.filter(p=>PE_HECHO.includes(p.estado)&&fechaAt(p)>=ini&&fechaAt(p)<=fin);
+    const no=ps.filter(p=>!['cerrada',...PE_HECHO].includes(p.estado)&&p.compromiso&&p.compromiso<=fin).sort((a,b)=>a.compromiso<b.compromiso?-1:1);
+    const sig=ps.filter(p=>!['cerrada',...PE_HECHO].includes(p.estado)&&(!p.compromiso||p.compromiso>fin));
+    tA+=at.length;tP+=pa.length;tN+=no.length;
+    if(!at.length&&!pa.length&&!no.length&&!sig.length)return '';
+    const tb=(arr,cols)=>`<table class="pm-t pm-ac"><thead><tr><th>No.</th><th>Pendiente</th><th>Asignado a</th>${cols.map(c=>`<th>${c[0]}</th>`).join('')}</tr></thead><tbody>${arr.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.titulo)}${p.origen==='acuerdo'?' <i>(acuerdo de minuta)</i>':''}</td><td>${esc(nom(p))}</td>${cols.map(c=>`<td>${c[1](p)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    return `<h2 class="inf-ob">${esc(o.numero||'')} · ${esc(o.nombre||'')}</h2><p class="pm-p" style="margin-top:0">${esc(o.aeropuerto||'')} · Contratista: ${esc(o.contratista||'—')} · Supervisión: ${esc(o.supervision||'—')}</p>
+      <h3>Atendidos y cerrados (${at.length})</h3>${at.length?tb(at,[['Compromiso',p=>fD(p.compromiso)],['Atendido',p=>fD(fechaAt(p))],['Aprobó',p=>esc(p.aprobPor||'—')]]):'<p class="pm-p">Ninguno.</p>'}
+      <h3>Hechos, en espera de aprobación (${pa.length})</h3>${pa.length?tb(pa,[['Compromiso',p=>fD(p.compromiso)],['Marcado',p=>fD(fechaAt(p))],['Estado',p=>esc(PE_EST[p.estado][0])]]):'<p class="pm-p">Ninguno.</p>'}
+      <h3>No atendidos (${no.length})</h3>${no.length?tb(no,[['Compromiso',p=>fD(p.compromiso)],['Atraso',p=>{const d=dayDiff(p.compromiso,fin);return d>0?d+' días':'vence en la semana'}],['Estado',p=>esc((PE_EST[p.estado]||[p.estado])[0])+(p.rechazoNota?'<br><i>Regresado: '+esc(p.rechazoNota)+'</i>':'')]]):'<p class="pm-p">Ninguno. ¡Bien!</p>'}
+      ${sig.length?`<h3>En curso, con compromiso posterior (${sig.length})</h3>${tb(sig,[['Compromiso',p=>fD(p.compromiso)],['Estado',p=>esc((PE_EST[p.estado]||[p.estado])[0])]])}`:''}`}).join('');
+  const cum=tA+tP+tN?Math.round((tA+tP)/(tA+tP+tN)*100):100;
+  return `<div class="pm">
+  <div class="pm-h">${F.logo?`<img class="pm-img" src="${F.logo}" alt="Logo">`:`<div class="pm-logo">${LOGO.replace('<svg ','<svg width="40" height="40" color="#333" style="color:#333" ').replace(/currentColor/g,'#333')}</div>`}<div class="pm-hc">${F.empresa?`<b>${esc(F.empresa)}</b>`:''}${F.area?`<span>${esc(F.area)}</span>`:''}<div class="pm-k">Informe semanal de pendientes</div><h1>Semana del ${fD(ini)} al ${fD(fin)}</h1></div>${F.codigo?`<div class="pm-cod">${esc(F.codigo)}</div>`:''}</div>
+  <table class="pm-t inf-res"><tr><th>Atendidos y cerrados</th><th>Hechos por aprobar</th><th>No atendidos</th><th>Cumplimiento</th></tr><tr><td>${tA}</td><td>${tP}</td><td>${tN}</td><td>${cum}%</td></tr></table>
+  <p class="pm-p" style="font-size:10.5px;color:#555">Cumplimiento = (atendidos + hechos por aprobar) ÷ (esos + no atendidos con compromiso al ${fD(fin)} o antes).</p>
+  ${secs||'<p class="pm-p">No hay pendientes registrados para esta selección.</p>'}
+  <h2>Observaciones</h2><div class="inf-obs"></div>
+  <table class="pm-t inf-fir"><tr><td><div class="inf-l"></div>Elaboró<br><b>${esc(U?U.nombre:'')}</b></td><td><div class="inf-l"></div>Revisó<br>&nbsp;</td><td><div class="inf-l"></div>Vo. Bo.<br>&nbsp;</td></tr></table>
+  <div class="pm-pie">Impreso el ${fDT(isoT(new Date()))} por ${esc(U?U.nombre:'')} · Formato de muestra</div></div>`}
+/* ---------- Informe del historial de movimientos ---------- */
+function histForm(){if(!isAdmin())return;const ob=V.obra||'';const ini=HOY().slice(0,8)+'01';
+  const us=[...new Set(D.historial.map(h=>h.usuario).filter(Boolean))].sort();
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:520px"><div class="mh"><h2>Informe de movimientos</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb"><div class="fld"><label for="hiIni">Del</label><input id="hiIni" type="date" value="${ini}"></div><div class="fld"><label for="hiFin">Al</label><input id="hiFin" type="date" value="${HOY()}"></div>
+    <div class="fld full"><label for="hiObra">Obra</label><select id="hiObra"><option value="">Todas las obras</option>${D.obras.map(o=>`<option value="${o.id}" ${o.id===ob?'selected':''}>${esc(obraCorto(o.id))} · ${esc(o.nombre)}</option>`).join('')}</select></div>
+    <div class="fld full"><label for="hiUser">Usuario</label><select id="hiUser"><option value="">Todos</option>${us.map(u=>`<option>${esc(u)}</option>`).join('')}</select></div>
+    <div class="fld full"><label><input type="checkbox" id="hiDet" checked style="width:auto;min-height:0;margin-right:6px">Incluir el detalle de cada cambio (antes → después)</label></div>
+    <span class="note full" id="hiErr" style="color:var(--bad)"></span></div><div class="mf"><button class="btn" data-close="1">Cancelar</button><button class="btn pri" id="hiGo">${ic('file')}Ver informe</button></div></div></div>`;
+  $('#hiGo').onclick=()=>{const a=$('#hiIni').value,b=$('#hiFin').value;if(!a||!b){$('#hiErr').textContent='Elige las dos fechas del periodo.';return}if(a>b){$('#hiErr').textContent='La fecha "Del" debe ser anterior o igual a "Al".';return}
+    const o=$('#hiObra').value;const ob=byId('obras',o);previewDoc(histHTML(a,b,o,$('#hiUser').value,$('#hiDet').checked),`Informe de movimientos ${ob?ob.numero+' ':''}${a} al ${b}.pdf`.replace(/[\/:*?"<>|]+/g,'-'))}}
+function histHTML(ini,fin,obraId,usuario,det){const F=fmtImp();
+  const it=D.historial.filter(h=>{const f=String(h.fecha||'').slice(0,10);return f>=ini&&f<=fin&&(!obraId||h.obraId===obraId)&&(!usuario||h.usuario===usuario)}).sort((a,b)=>a.fecha<b.fecha?-1:1);
+  const cuenta=k=>{const m={};it.forEach(h=>{const v=k(h)||'—';m[v]=(m[v]||0)+1});return Object.entries(m).sort((a,b)=>b[1]-a[1])};
+  const mini=(t,arr)=>`<table class="pm-t"><thead><tr><th>${t}</th><th style="width:46px;text-align:right">Movs.</th></tr></thead><tbody>${arr.map(([k,v])=>`<tr><td>${esc(k)}</td><td style="text-align:right">${v}</td></tr>`).join('')||'<tr><td colspan="2">—</td></tr>'}</tbody></table>`;
+  const obs=obraId?[obraId]:[...new Set(it.map(h=>h.obraId))];
+  const secs=obs.map(oid=>{const o=byId('obras',oid)||{};const hs=it.filter(h=>h.obraId===oid);if(!hs.length)return '';
+    return `<h2 class="inf-ob">${esc(o.numero||'Sin obra')} · ${esc(o.nombre||'')} (${hs.length})</h2><table class="pm-t pm-ac"><thead><tr><th>No.</th><th>Fecha y hora</th><th>Usuario</th><th>Acción</th><th>Registro</th></tr></thead><tbody>${hs.map((h,i)=>`<tr><td>${i+1}</td><td>${fDT(h.fecha)}</td><td>${esc(h.usuario||'')}<br><i>${esc(ROLES[h.rol]||'')}</i></td><td>${esc(h.accion||'')}</td><td><b>${esc(h.tipo||'')}</b>: ${esc(h.ref||'')}${det&&(h.cambios||[]).length?`<div class="hi-ch">${h.cambios.slice(0,12).map(c=>`${esc(c[0])}: ${esc(c[1])} → ${esc(c[2])}`).join('<br>')}</div>`:''}</td></tr>`).join('')}</tbody></table>`}).join('');
+  return `<div class="pm">
+  <div class="pm-h">${F.logo?`<img class="pm-img" src="${F.logo}" alt="Logo">`:`<div class="pm-logo">${LOGO.replace('<svg ','<svg width="40" height="40" color="#333" style="color:#333" ').replace(/currentColor/g,'#333')}</div>`}<div class="pm-hc">${F.empresa?`<b>${esc(F.empresa)}</b>`:''}${F.area?`<span>${esc(F.area)}</span>`:''}<div class="pm-k">Informe del historial de movimientos</div><h1>Del ${fD(ini)} al ${fD(fin)}</h1></div>${F.codigo?`<div class="pm-cod">${esc(F.codigo)}</div>`:''}</div>
+  <table class="pm-t"><tr><th>Obra</th><td>${obraId?esc(obraCorto(obraId)):'Todas'}</td><th>Usuario</th><td>${esc(usuario||'Todos')}</td><th>Movimientos</th><td><b>${it.length}</b></td></tr></table>
+  ${it.length?`<div class="hi-res"><div>${mini('Por usuario',cuenta(h=>h.usuario))}</div><div>${mini('Por acción',cuenta(h=>h.accion))}</div><div>${mini('Por tipo de registro',cuenta(h=>h.tipo))}</div></div>${secs}`:'<p class="pm-p">No hubo movimientos en este periodo.</p>'}
+  <div class="pm-pie">Impreso el ${fDT(isoT(new Date()))} por ${esc(U?U.nombre:'')} · Formato de muestra</div></div>`}
 function fitPaper(){const pp=$('#pvPaper');if(!pp)return;const w=pp.parentElement.clientWidth-24,full=816;const k=Math.min(1,w/full);pp.style.transform=k<1?`scale(${k})`:'';pp.style.marginLeft=k<1?'0':'';pp.style.marginBottom=k<1?`${-(pp.offsetHeight*(1-k))}px`:''}
 addEventListener('resize',fitPaper);
 const pdfLib=()=>window.html2pdf?Promise.resolve(window.html2pdf):new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';sc.onload=()=>window.html2pdf?ok(window.html2pdf):no();sc.onerror=no;document.head.appendChild(sc)});
