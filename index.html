@@ -297,6 +297,7 @@ fieldset.perms legend{font-size:12.5px;color:var(--muted);padding:0 4px}
   .top{background:var(--navy);color:#fff;border:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));flex-wrap:wrap}
   .mtitle{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
   .mtitle b{display:none}
+.mtitle .mbrand{font-family:var(--f-display);font-weight:700;font-size:13px;letter-spacing:.04em;line-height:1.15;color:#fff;flex:none}
   .mtitle svg{width:30px;height:30px;color:#fff;flex:none}
   .top .search{order:5;flex-basis:100%;max-width:none;background:#fff;color:#13233a;border:0}
   .top .user{margin-left:0}
@@ -402,15 +403,14 @@ body.locked .side,body.locked .bnav,body.locked .fab,body.locked .top .search{di
   <aside class="side" aria-label="Menú principal">
     <div class="brand">
       <div class="logo-plate" data-logo></div>
-      <b>Control de Obras</b>
-      <small>Infraestructura aeroportuaria</small>
+      <b>INFRAESTRUCTURA ASUR</b>
+      <small>Control de obras</small>
     </div>
     <nav class="nav" id="nav"></nav>
-    <div class="motto" id="motto">Contratos, avances y estimaciones en un solo lugar.</div>
   </aside>
   <div class="main">
     <header class="top">
-      <div class="mtitle"><span class="logo-plate" data-logo></span><b id="mTitle">Panel</b></div>
+      <div class="mtitle"><span class="logo-plate" data-logo></span><span class="mbrand">INFRAESTRUCTURA<br>ASUR</span><b id="mTitle">Panel</b></div>
       <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Buscar obra, acuerdo, nota de bitácora…" aria-label="Buscar"></label>
       <button class="net" id="net" title="Estado de sincronización"><i></i><span id="netTxt">Solo este dispositivo</span></button>
       <button class="user" id="userBtn" aria-label="Mi nombre"><div class="avatar" id="uAv">CO</div><div class="who"><b id="uName">Coordinador</b><small id="uRol">Rol</small></div></button>
@@ -725,7 +725,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v28';
+const APP_VER='20-nov-2026 · v29';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
