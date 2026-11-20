@@ -675,6 +675,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
+const APP_VER='20-nov-2026 · v15';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -892,7 +893,7 @@ buscar(){const q=V.q.trim().toLowerCase();const m=x=>JSON.stringify(x).toLowerCa
 config(){const c=S.sync;const cl=S.sync.on&&S.sync.url;const users=cl?Sync.perfiles.map(x=>({id:x.email,email:x.email,nombre:x.nombre,rol:x.rol,obraId:x.obra_id||''})):S.usuarios;
   return `${phead('Ajustes','Tu cuenta, usuarios, sincronización y respaldos')}
   <div class="g2">
-  <div class="card"><div class="card-h"><h2>Tu cuenta</h2></div><div class="card-b"><div class="kv"><div>Nombre</div><div>${esc(U?U.nombre:'—')}</div><div>Usuario</div><div class="num">${esc(U?(U.usuario||U.email||''):'—')}</div><div>Rol</div><div>${esc(U?ROLES[U.rol]:'—')}</div><div>Contrato</div><div style="white-space:normal">${U&&U.obraId?esc(obraCorto(U.obraId)):'Todos los contratos'}</div></div>
+  <div class="card"><div class="card-h"><h2>Tu cuenta</h2><span class="note">Versión ${APP_VER}</span></div><div class="card-b"><div class="kv"><div>Nombre</div><div>${esc(U?U.nombre:'—')}</div><div>Usuario</div><div class="num">${esc(U?(U.usuario||U.email||''):'—')}</div><div>Rol</div><div>${esc(U?ROLES[U.rol]:'—')}</div><div>Contrato</div><div style="white-space:normal">${U&&U.obraId?esc(obraCorto(U.obraId)):'Todos los contratos'}</div></div>
     ${!cl?`<div class="row" style="margin-top:12px"><button class="btn" data-act="myPw">Cambiar mi contraseña</button><button class="btn" data-act="logout">Cerrar sesión</button></div>`:`<div class="row" style="margin-top:12px"><button class="btn" data-act="logout">Cerrar sesión</button></div>`}</div></div>
   ${isAdmin()?`<div class="card"><div class="card-h"><h2>Respaldo y datos</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px"><div class="row"><button class="btn" data-act="export">Descargar respaldo</button><button class="btn" data-act="import">Cargar respaldo</button></div><p class="note" style="margin:0">El respaldo incluye registros y fotos. Los archivos de Documentos se guardan aparte en este dispositivo o en la nube.</p><div class="row">${S.config.ejemplos?`<button class="btn danger" data-act="clearDemo">Borrar obras de ejemplo</button>`:`<button class="btn" data-act="reseed">Cargar obras de ejemplo</button>`}</div></div></div>`:''}
   </div>
@@ -1183,7 +1184,7 @@ window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h
   const h=location.hash.slice(1);if(NAV.some(n=>n[0]===h))V.view=h;
   render();updNet();
   if(!inClaude)Sync.start();
-  try{if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!inClaude)navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
+  try{if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!inClaude){const habia=!!navigator.serviceWorker.controller;navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});let rec=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(habia&&!rec){rec=true;location.reload()}})}}catch(e){}
 })();
 })();
 </script>
