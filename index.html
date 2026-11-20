@@ -290,6 +290,18 @@ fieldset.perms{border:1px solid var(--line);border-radius:10px;padding:8px 12px}
 fieldset.perms legend{font-size:12.5px;color:var(--muted);padding:0 4px}
 #userBtn{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;margin-left:auto;border-radius:10px}
 #userBtn:focus-visible{outline:2px solid var(--accent)}
+.bell{all:unset;cursor:pointer;position:relative;display:grid;place-items:center;width:40px;height:40px;border-radius:10px;margin-left:auto;color:inherit}
+.bell svg{width:24px;height:24px}.bell:focus-visible{outline:2px solid var(--accent)}
+.bell:not([hidden])~#userBtn{margin-left:0}
+.bell .bdg{position:absolute;top:2px;right:0;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;box-sizing:border-box}
+.chk{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-weight:600}
+.chk input{width:22px!important;height:22px;min-height:0!important;margin:0;accent-color:var(--bad);flex:none}
+.chk:has(input:checked){border-color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,transparent);color:var(--bad)}
+.av-li.nuevo{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.av-li .av-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none}
+.av-li .av-ic svg{width:18px;height:18px}
+body.locked .bell{display:none!important}
+@media (max-width:520px){.top .net #netTxt{display:none}.top .net{padding:9px}}
 @media (max-width:1180px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.g3>:last-child{grid-column:1/-1}}
 @media (max-width:980px){.g2,.detail{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:860px){
@@ -413,6 +425,7 @@ body.locked .side,body.locked .bnav,body.locked .fab,body.locked .top .search{di
       <div class="mtitle"><span class="logo-plate" data-logo></span><span class="mbrand">INFRAESTRUCTURA<br>ASUR</span><b id="mTitle">Panel</b></div>
       <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Buscar obra, acuerdo, nota de bitácora…" aria-label="Buscar"></label>
       <button class="net" id="net" title="Estado de sincronización"><i></i><span id="netTxt">Solo este dispositivo</span></button>
+      <button class="bell" id="bellBtn" aria-label="Avisos" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="bdg" id="bellN" hidden></span></button>
       <button class="user" id="userBtn" aria-label="Mi nombre"><div class="avatar" id="uAv">CO</div><div class="who"><b id="uName">Coordinador</b><small id="uRol">Rol</small></div></button>
     </header>
     <main class="content" id="view" tabindex="-1"></main>
@@ -428,6 +441,7 @@ body.locked .side,body.locked .bnav,body.locked .fab,body.locked .top .search{di
 'use strict';
 /* ---------- Íconos ---------- */
 const I={
+  bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
   home:'<path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
   build:'<path d="M3 21h18M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5M9 10h.01M15 10h.01M9 13h.01M15 13h.01"/>',
   plane:'<path d="M10.5 3.5c0-.8.7-1.5 1.5-1.5s1.5.7 1.5 1.5V9l8 4.5V16l-8-2.5v5l2.5 2V22L12 21l-4 1v-1.5l2.5-2v-5l-8 2.5v-2.5l8-4.5z"/>',
@@ -534,6 +548,8 @@ const CONTRA_VE=['obras','bitacora','avances','estimaciones','convenios','pendie
 function visible(col,x){if(col==='ajustes'||isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isContra())return CONTRA_VE.includes(col);if(isExt())return col==='obras'||col==='bitacora';return true}
 const D=new Proxy({},{get:(_,col)=>(S[col]||[]).filter(x=>visible(col,x))});
 const canCat=()=>isAdmin()||(!!U&&U.rol==='supervision');
+/* Estimaciones autorizadas o pagadas: solo Infraestructura (gerente o coordinador regional) las puede borrar */
+function canDelete(col,x){if(!x||!canEdit(col,x))return false;if(col==='estimaciones'&&['autorizada','pagada'].includes(x.estado))return isAdmin();return true}
 function canCreate(col){if(isAdmin())return true;if(!U)return false;if(col==='catalogoBase')return canCat();if(isExt())return col==='bitacora'||(isSup()&&(SUP_CARGA.includes(col)||col==='pendientes'));return col!=='obras'&&col!=='historial'}
 function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='conceptos')return x.extra?isSup()&&x.exEstado!=='autorizado':canCat();if(col==='ordenes')return isSup()&&['borrador','rechazada'].includes(x.estado);if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(col==='pendientes'&&isSup())return x.porId===U.id&&x.estado!=='cerrada';if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
 const COL_L={ordenes:'Orden de cambio',conceptos:'Concepto de catálogo',avconc:'Avance de concepto',obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
@@ -725,7 +741,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v30';
+const APP_VER='20-nov-2026 · v31';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 /* Cierra la sesión (sin borrar datos) y vuelve a la pantalla de acceso */
 function bloquear(msg){U=null;S.config.ses='';S.config.cloudU=null;persist('config');if(Sync.cli){try{Sync.cli.auth.signOut({scope:'local'})}catch(e){}if(Sync.ch){try{Sync.cli.removeChannel(Sync.ch)}catch(e){}Sync.ch=null}Sync.set('auth')}closeModal();V.view='panel';render();if(msg)setTimeout(()=>toast(msg),300)}
@@ -733,7 +749,7 @@ function bloquear(msg){U=null;S.config.ses='';S.config.cloudU=null;persist('conf
 function checkAlta(){if(!U)return;if(S.sync.on&&S.sync.url){Sync.vigente();return}if(!S.usuarios.some(z=>z.id===U.id))bloquear('Tu acceso fue dado de baja.')}
 let ocultoDesde=0;
 document.addEventListener('visibilitychange',()=>{if(document.hidden){ocultoDesde=Date.now();return}if(U&&ocultoDesde&&Date.now()-ocultoDesde>5*60*1000){bloquear('Por seguridad, vuelve a entrar con tu usuario y contraseña.');return}checkAlta()});
-setInterval(checkAlta,60*1000);
+setInterval(()=>{checkAlta();updBell();notificar()},60*1000);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
   ready(){return this.cli&&this.st!=='auth'&&this.st!=='off'&&navigator.onLine},
@@ -917,9 +933,32 @@ function navHtml(){const N=navFor(),B=bnavFor();const pa=isAdmin()?porAprobar().
 const FAB={obras:'newObra',estimaciones:'newEst',pendientes:'newPen',minutas:'newMin',bitacora:'newBit',evidencias:'newEv',documentos:'newDoc'};
 const TAB_FAB={ordenes:'newOC',estimaciones:'newEst',avance:'newAv',catalogo:'newConc',pendientes:'newPen',minutas:'newMin',bitacora:'newBit',evidencias:'newEv',documentos:'newDoc'};
 const FAB_COL={newOC:'ordenes',newConc:'catalogoBase',newObra:'obras',newEst:'estimaciones',newPen:'pendientes',newMin:'minutas',newBit:'bitacora',newEv:'evidencias',newDoc:'documentos',newAv:'avances'};
+/* ---------- Avisos (campana) y notificaciones del teléfono ---------- */
+const AV_DIAS=[30,15,5,1];
+function avisos(){if(!U)return [];const out=[],hoy=HOY();
+  D.obras.filter(o=>o.fin&&!['terminada','finiquitada'].includes(o.estado)).forEach(o=>{const d=dayDiff(hoy,o.fin);if(d<0||d>30)return;const m=[...AV_DIAS].reverse().find(x=>d<=x);
+    out.push({k:`fin:${o.id}:${o.fin}:${m}`,ic:'alert',tn:d<=5?'bad':'warn',t:d===0?'El contrato termina hoy':d===1?'Falta 1 día para el término del contrato':`Faltan ${d} días para el término del contrato`,b:`${o.numero||''} · ${o.nombre||''} · termina el ${fD(o.fin)}`,go:['obra',o.id],f:o.fin})});
+  D.pendientes.filter(p=>p.asignadoId===U.id&&['pendiente','proceso'].includes(p.estado||'pendiente')).forEach(p=>out.push({k:`pen:${p.id}:${U.id}`,ic:'check',tn:'info',t:'Te asignaron un pendiente',b:`${p.titulo||''} · ${obraCorto(p.obraId)}${p.compromiso?' · compromiso '+fD(p.compromiso):''}`,go:['pen',p.obraId],f:p.upd||p.compromiso||''}));
+  if(isAdmin())D.bitacora.filter(b=>b.critica==='si'&&b.porId!==U.id).forEach(b=>out.push({k:`bit:${b.id}`,ic:'book',tn:'bad',t:'Nota urgente en bitácora: requiere atención inmediata',b:`${b.tipo||''} · ${obraCorto(b.obraId)} · ${b.por||''}: ${String(b.texto||'').slice(0,90)}`,go:['bit',b.id],f:b.fecha||''}));
+  return out.sort((a,b)=>String(b.f).localeCompare(String(a.f)))}
+const avSt=()=>{S.config.av=S.config.av||{};const k=U?U.id:'-';return S.config.av[k]=S.config.av[k]||{visto:{},notif:{}}};
+function updBell(){const b=$('#bellBtn');if(!b)return;b.hidden=!U;if(!U)return;const st=avSt();const n=avisos().filter(a=>!st.visto[a.k]).length;const e=$('#bellN');e.hidden=!n;e.textContent=n>9?'9+':n;b.setAttribute('aria-label',n?`Avisos: ${n} nuevos`:'Avisos')}
+function showAvisos(){const st=avSt(),it=avisos();const perm=typeof Notification==='undefined'?'no':Notification.permission;
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:560px"><div class="mh"><h2>Avisos</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr">
+    ${perm==='default'?`<div class="note" style="margin:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:180px">Activa las notificaciones para que el teléfono te avise.</span><button class="btn sm pri" data-act="avPerm">${ic('bell')}Activar notificaciones</button></div>`:perm==='denied'?'<p class="note" style="margin:0">Las notificaciones están bloqueadas en este teléfono. Actívalas en los ajustes del navegador para esta app.</p>':perm==='no'?'<p class="note" style="margin:0">Este navegador no permite notificaciones. En iPhone o iPad, instala la app en la pantalla de inicio (iOS 16.4 o más reciente).</p>':''}
+    ${it.length?`<div class="lst">${it.map(a=>`<div class="li click av-li ${st.visto[a.k]?'':'nuevo'}" data-av="${esc(a.k)}"><span class="av-ic tint-${a.tn}">${ic(a.ic)}</span><div style="min-width:0"><b>${esc(a.t)}</b><div class="sub">${esc(a.b)}</div></div>${st.visto[a.k]?'':'<span class="pill p-info"><i></i>Nuevo</span>'}</div>`).join('')}</div>`:'<div class="empty">No tienes avisos.</div>'}
+    <p class="note" style="margin:0">Recibes avisos a 30, 15, 5 y 1 día del término de cada contrato, cuando te asignan un pendiente${isAdmin()?' y cuando alguien marca una nota de bitácora como urgente':''}.</p></div>
+    <div class="mf">${it.some(a=>!st.visto[a.k])?`<button class="btn" data-act="avTodo">Marcar todo como leído</button>`:''}<button class="btn pri" data-close="1">Cerrar</button></div></div></div>`}
+function abrirAviso(k){const a=avisos().find(x=>x.k===k);const st=avSt();st.visto[k]=1;st.notif[k]=1;persist('config');closeModal();if(!a){render();return}
+  if(a.go[0]==='obra')go('obras',a.go[1],'resumen');else if(a.go[0]==='pen'){V.obra='';V.f='';go('pendientes')}else if(a.go[0]==='bit'){go('bitacora');setTimeout(()=>showBit(byId('bitacora',a.go[1])),80)}updBell()}
+/* Notificación del teléfono para cada aviso nuevo (una sola vez por aviso) */
+async function notificar(){if(!U||typeof Notification==='undefined'||Notification.permission!=='granted')return;const st=avSt();const nuevos=avisos().filter(a=>!st.notif[a.k]&&!st.visto[a.k]);if(!nuevos.length)return;
+  let reg=null;try{reg='serviceWorker' in navigator?await navigator.serviceWorker.getRegistration():null}catch(e){}
+  for(const a of nuevos.slice(0,5)){const o={body:a.b,tag:a.k,icon:'icon.svg',badge:'icon.svg',data:{av:a.k}};try{if(reg&&reg.showNotification)await reg.showNotification(a.t,o);else new Notification(a.t,o)}catch(e){}st.notif[a.k]=1}
+  nuevos.slice(5).forEach(a=>st.notif[a.k]=1);persist('config')}
 function render(){const N=navFor();if(V.view!=='buscar'&&!N.some(n=>n[0]===V.view)){V.view=N[0][0];V.id=null}
   document.body.classList.toggle('locked',!U||!!(U.cambiar&&!(S.sync.on&&S.sync.url)));navHtml();const f=!U?VIEWS.login:(U.cambiar&&!(S.sync.on&&S.sync.url))?VIEWS.cambiaPw:(VIEWS[V.view]||VIEWS.panel);$('#view').innerHTML=f();
-  const fm=V.view==='obras'&&V.id?(TAB_FAB[V.tab]||'newEv'):FAB[V.view];$('#fab').hidden=!U||!fm||(V.view==='obras'&&!V.id&&!isAdmin())||!canCreate(FAB_COL[fm]);bindCharts()}
+  const fm=V.view==='obras'&&V.id?(TAB_FAB[V.tab]||'newEv'):FAB[V.view];$('#fab').hidden=!U||!fm||(V.view==='obras'&&!V.id&&!isAdmin())||!canCreate(FAB_COL[fm]);bindCharts();updBell()}
 
 /* ---------- Piezas de interfaz ---------- */
 const ACT_COL={...FAB_COL,newConv:'convenios'};
@@ -939,7 +978,7 @@ const sortPen=a=>[...a].sort((x,y)=>(x.estado==='cerrada')-(y.estado==='cerrada'
 
 const BIT_EST={cargada:['Cargada','off'],revision:['En revisión','warn'],aprobada:['Aprobada','ok'],rechazada:['Rechazada','bad']};
 function bitList(items,showObra){if(!items.length)return empty('Sin notas de bitácora.');
-  return `<div class="lst">${[...items].sort((a,b)=>a.fecha<b.fecha?1:-1).map(b=>`<div class="li click" data-bit="${b.id}"><span class="folio">${b.folio&&b.estado==='aprobada'?'Nota '+b.folio:'Sin folio'}</span><div style="min-width:0"><b>${esc(b.tipo)}${b.tipo==='Respuesta'&&b.respondeA?` a la nota ${esc(b.respondeA)}`:''}</b><div class="sub num">${fDT(b.fecha)} · ${esc(b.por||'')}${showObra?' · '+esc(obraCorto(b.obraId)):''}</div><div class="txt">${esc(b.texto)}</div>${(b.fotos||[]).length?`<div class="pv" style="margin-top:8px">${b.fotos.map(f=>`<img src="${f}" alt="">`).join('')}</div>`:''}${b.estado==='rechazada'&&b.motivo?`<div class="sub" style="color:var(--bad)">Motivo: ${esc(b.motivo)}</div>`:''}</div><div class="acts">${pill(BIT_EST,b.estado||'aprobada')}</div></div>`).join('')}</div>`}
+  return `<div class="lst">${[...items].sort((a,b)=>a.fecha<b.fecha?1:-1).map(b=>`<div class="li click" data-bit="${b.id}"><span class="folio">${b.folio&&b.estado==='aprobada'?'Nota '+b.folio:'Sin folio'}</span><div style="min-width:0"><b>${esc(b.tipo)}${b.tipo==='Respuesta'&&b.respondeA?` a la nota ${esc(b.respondeA)}`:''}</b>${b.critica==='si'?' <span class="pill p-bad"><i></i>Urgente</span>':''}<div class="sub num">${fDT(b.fecha)} · ${esc(b.por||'')}${showObra?' · '+esc(obraCorto(b.obraId)):''}</div><div class="txt">${esc(b.texto)}</div>${(b.fotos||[]).length?`<div class="pv" style="margin-top:8px">${b.fotos.map(f=>`<img src="${f}" alt="">`).join('')}</div>`:''}${b.estado==='rechazada'&&b.motivo?`<div class="sub" style="color:var(--bad)">Motivo: ${esc(b.motivo)}</div>`:''}</div><div class="acts">${pill(BIT_EST,b.estado||'aprobada')}</div></div>`).join('')}</div>`}
 function histList(items,showObra){if(!items.length)return empty('Sin movimientos registrados.');
   const col=a=>a==='eliminó'||a==='rechazó'?'var(--bad)':a==='creó'||a==='aprobó'?'var(--ok)':'var(--info)';
   return `<div class="lst">${[...items].sort((a,b)=>a.fecha<b.fecha?1:-1).slice(0,400).map(h=>`<div class="li"><span class="mk" style="background:${col(h.accion)}"></span><div style="min-width:0"><div><b>${esc(h.usuario)}</b> <span class="note">${esc(ROLES[h.rol]||'')}</span></div><div>${esc(h.accion)} ${esc(String(h.tipo||'').toLowerCase())}: <b>${esc(h.ref)}</b></div>${(h.cambios||[]).length?`<div class="sub">${h.cambios.slice(0,10).map(c=>`${esc(c[0])}: <s>${esc(c[1])}</s> → ${esc(c[2])}`).join('<br>')}</div>`:''}<div class="sub num">${fDT(h.fecha)}${showObra?' · '+esc(obraCorto(h.obraId)):''}</div></div></div>`).join('')}</div>`}
@@ -1145,23 +1184,24 @@ function obraDetail(o){if(!o)return empty('Esta obra ya no existe.');const r=res
 
 /* ---------- Formularios ---------- */
 const UNIDADES=['m','m2','m3','ml','km','pza','kg','ton','lote','jgo','lt','hr','día','mes','sal'];
+const UNID_SEL=[['m','m · metro'],['ml','ml · metro lineal'],['m2','m² · metro cuadrado'],['m3','m³ · metro cúbico'],['m3-km','m³-km · metro cúbico por kilómetro'],['km','km · kilómetro'],['kg','kg · kilogramo'],['ton','ton · tonelada'],['lt','lt · litro'],['pza','pza · pieza'],['jgo','jgo · juego'],['lote','lote'],['sal','sal · salida'],['viaje','viaje'],['jor','jor · jornada'],['hr','hr · hora'],['día','día'],['mes','mes'],['%','% · porcentaje']];
 const partidasDe=o=>[...new Set(S.conceptos.filter(c=>c.obraId===o.obraId&&!c.deleted).map(c=>c.partida).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));
 const subsDe=o=>[...new Set(S.conceptos.filter(c=>c.obraId===o.obraId&&!c.deleted).map(c=>c.subpartida).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));
 const ocOpts=o=>[['','Sin orden de cambio'],...S.ordenes.filter(x=>x.obraId===o.obraId&&!x.deleted).sort((a,b)=>natCmp(a.folio,b.folio)).map(x=>[x.id,`${x.folio} · ${String(x.titulo||'').slice(0,50)}`])];
-const CONC_F=[['obraId','Obra','obra',1,null,1],['partida','Partida','list',1,partidasDe,0,'Ej. 2 Pavimentos. Escribe una nueva o elige una existente.'],['subpartida','Subpartida','list',0,subsDe,0,'Opcional. Ej. 2.1 Demoliciones.'],['clave','Clave del concepto','text',1],['unidad','Unidad','list',1,UNIDADES],['descripcion','Descripción','textarea',1,null,1],['cantidad','Cantidad de proyecto','number',1],['pu','Precio unitario (sin IVA)','money',1]];
+const CONC_F=[['obraId','Obra','obra',1,null,1],['partida','Partida','list',1,partidasDe,0,'Ej. 2 Pavimentos. Escribe una nueva o elige una existente.'],['subpartida','Subpartida','list',0,subsDe,0,'Opcional. Ej. 2.1 Demoliciones.'],['clave','Clave del concepto','text',1],['unidad','Unidad','unidad',1],['descripcion','Descripción','textarea',1,null,1],['cantidad','Cantidad de proyecto','number',1],['pu','Precio unitario (sin IVA)','money',1]];
 const obraOpts=()=>D.obras.map(o=>[o.id,(o.aeropuerto?o.aeropuerto+' · ':'')+o.nombre]);
 const FORMS={
   obras:{t:'Obra',f:[['numero','No. de contrato','text',1],['tipo','Tipo','select',0,['Obra','Supervisión','Proyecto ejecutivo','Servicios']],['nombre','Nombre de la obra','text',1,null,1],['aeropuerto','Aeropuerto','list',0,AEROS],['estado','Estado','select',0,Object.entries(OB_EST).map(([k,v])=>[k,v[0]])],['contratista','Contratista','text'],['supervision','Supervisión externa','text'],['residente','Residente de obra','text'],['monto','Monto del contrato (sin IVA)','money',1],['anticipo','Anticipo (%)','number'],['inicio','Fecha de inicio','date',1],['fin','Fecha de término','date',1],['notas','Notas','textarea',0,null,1]]},
   convenios:{t:'Convenio modificatorio',f:[['obraId','Obra','obra',1,null,1],['numero','Número','text',1],['fecha','Fecha','date',1],['tipo','Tipo','select',0,['Monto','Plazo','Monto y plazo','Reducción']],['monto','Monto (sin IVA, negativo si reduce)','money'],['dias','Días de ampliación','number'],['descripcion','Motivo','textarea',0,null,1]]},
   estimaciones:{t:'Estimación',f:[['obraId','Obra','obra',1,null,1],['numero','No. de estimación','number',1],['estado','Estado','select',0,Object.entries(ES_EST).map(([k,v])=>[k,v[0]])],['periodoIni','Periodo del','date',1],['periodoFin','Periodo al','date',1],['importe','Importe ejecutado (sin IVA)','money',1],['amort','Amortización de anticipo','money',0,null,0,'Vacío = se calcula con el % de anticipo'],['retenciones','Retenciones','money'],['penas','Penas convencionales','money'],['fechaPres','Fecha de presentación','date'],['fechaPago','Fecha de pago','date'],['notas','Observaciones','textarea',0,null,1]]},
   conceptos:{t:'Concepto',f:CONC_F},
-  conceptosX:{t:'Precio extraordinario',f:[['clave','Clave del concepto','text',1],['unidad','Unidad','list',1,UNIDADES],['descripcion','Descripción','textarea',1,null,1],['cantidad','Cantidad','number',1],['pu','Precio unitario solicitado (sin IVA)','money',1,null,0,'El precio autorizado se captura al autorizar la orden.'],['justif','Justificación','textarea',1,null,1]]},
+  conceptosX:{t:'Precio extraordinario',f:[['clave','Clave del concepto','text',1],['unidad','Unidad','unidad',1],['descripcion','Descripción','textarea',1,null,1],['cantidad','Cantidad','number',1],['pu','Precio unitario solicitado (sin IVA)','money',1,null,0,'El precio autorizado se captura al autorizar la orden.'],['justif','Justificación','textarea',1,null,1]]},
   ordenes:{t:'Orden de cambio',f:[['obraId','Obra','obra',1,null,1],['titulo','Asunto','text',1,null,1],['fecha','Fecha','date',1],['solicita','Solicita (empresa o persona)','text',0],['motivo','Motivo y justificación','textarea',1,null,1]]},
   avconc:{t:'Avance de concepto',f:[['fecha','Fecha','date',1],['cantidad','Cantidad ejecutada en este registro','number',1,null,0,'Puede ser negativa para corregir.'],['nota','Nota (estimación, generador, frente de trabajo…)','textarea',0,null,1]]},
   avances:{t:'Corte de avance',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha de corte','date',1,null,0,'Hasta dos cortes por quincena (por ejemplo, a medio periodo y al día 15 o fin de mes).'],['programado','Avance programado acumulado (%)','number',1],['real','Avance físico real acumulado (%)','number',1],['nota','Nota','textarea',0,null,1]]},
   pendientes:{t:'Pendiente',f:[['obraId','Obra','obra',1,null,1],['titulo','Actividad o acuerdo','text',1,null,1],['asignadoId','Asignado a (usuario que lo marcará como hecho)','user',0,null,1],['responsable','Responsable externo (si no tiene usuario)','text'],['compromiso','Fecha compromiso','date'],['prioridad','Prioridad','select',0,Object.entries(PRIO).map(([k,v])=>[k,v[0]])],['estado','Estado','select',0,Object.entries(PE_EST).map(([k,v])=>[k,v[0]])],['notas','Notas','textarea',0,null,1]]},
   minutas:{t:'Minuta',f:[['obraId','Obra','obra',1,null,1],['titulo','Asunto de la reunión','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['lugar','Lugar','text'],['asistentes','Asistentes','asist',0,null,1],['temas','Temas tratados','textarea',0,null,1]]},
-  bitacora:{t:'Nota de bitácora',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha y hora','datetime-local',1],['tipo','Tipo de nota','select',0,BIT_T],['respondeA','Responde a la nota No.','number',1,null,0,'Escribe el número (folio) de la nota que contestas.',['tipo','Respuesta']],['texto','Descripción','textarea',1,null,1],['fotos','Fotos (máximo 4)','photos',0,4,1]]},
+  bitacora:{t:'Nota de bitácora',f:[['obraId','Obra','obra',1,null,1],['fecha','Fecha y hora','datetime-local',1],['tipo','Tipo de nota','select',0,BIT_T],['respondeA','Responde a la nota No.','number',1,null,0,'Escribe el número (folio) de la nota que contestas.',['tipo','Respuesta']],['critica','Atención','check',0,'Urgente: requiere atención inmediata (avisa a Infraestructura)',1],['texto','Descripción','textarea',1,null,1],['fotos','Fotos (máximo 4)','photos',0,4,1]]},
   evidencias:{t:'Evidencia',f:[['obraId','Obra','obra',1,null,1],['concepto','Concepto o frente de trabajo','text',1,null,1],['fecha','Fecha y hora','datetime-local',1],['gps','Ubicación GPS','gps'],['fotos','Fotos','photos',1,null,1],['nota','Nota','textarea',0,null,1]]},
   documentos:{t:'Documento',f:[['obraId','Obra','obra',1,null,1],['tipo','Tipo','select',0,DOC_T],['fecha','Fecha','date'],['nombre','Nombre','text',1,null,1],['file','Archivo (PDF, imagen, Excel, Word)','file',0,null,1],['notas','Notas','textarea',0,null,1]]},
 };
@@ -1176,6 +1216,8 @@ function openForm(col,obj,onSave,title,extra=''){const F=col==='pendientes'&&!is
     else if(t==='list')inp=`<input id="${id}" name="${k}" list="${id}-l" value="${esc(v)}"><datalist id="${id}-l">${(typeof opts==='function'?opts(o):opts).map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`;
     else if(t==='textarea')inp=`<textarea id="${id}" name="${k}">${esc(v)}</textarea>`;
     else if(t==='money')inp=`<input id="${id}" name="${k}" inputmode="decimal" value="${v===''?'':esc(v)}" placeholder="0.00">`;
+    else if(t==='unidad'){const enL=UNID_SEL.some(u=>u[0]===v);const otro=v!==''&&!enL;inp=`<select id="${id}" name="${k}" data-unid="1"><option value="" ${v===''?'selected':''}>Elige la unidad…</option>${UNID_SEL.map(([a,b])=>`<option value="${esc(a)}" ${v===a?'selected':''}>${esc(b)}</option>`).join('')}<option value="__otro" ${otro?'selected':''}>Otro</option></select><input id="${id}-otro" name="${k}_otro" placeholder="Especifica la unidad" value="${otro?esc(v):''}" style="margin-top:8px" ${otro?'':'hidden'}>`}
+    else if(t==='check')inp=`<label class="chk" for="${id}"><input type="checkbox" id="${id}" name="${k}" ${v==='si'?'checked':''}><span>${opts||l}</span></label>`;
     else if(t==='user')inp=`<select id="${id}" name="${k}"><option value="">Sin asignar</option>${usersObra(o.obraId).map(u=>`<option value="${esc(u.id)}" ${v===u.id?'selected':''}>${esc(u.nombre)} · ${esc(ROLES[u.rol]||'')}</option>`).join('')}</select>`;
     else if(t==='number')inp=`<input id="${id}" name="${k}" type="number" step="any" value="${esc(v)}">`;
     else if(t==='photos'){photoMax=opts||0;inp=`<div class="row"><label class="btn sm ph-btn">${ic('camera')}Tomar foto<input type="file" accept="image/*" capture="environment" data-photos="1" hidden></label><label class="btn sm ph-btn">${ic('file')}Galería o archivos<input type="file" accept="image/*" multiple data-photos="1" hidden></label></div><div class="pv" id="pv">${pvHtml()}</div><span class="hint" id="pvH">${photoMax?`Hasta ${photoMax} fotos. `:''}Toca la ✕ para quitar una.</span>`}
@@ -1184,13 +1226,13 @@ function openForm(col,obj,onSave,title,extra=''){const F=col==='pendientes'&&!is
     else if(t==='gps')inp=`<div class="row" style="flex-wrap:nowrap"><input id="${id}" name="${k}" value="${esc(v)}" placeholder="lat, long" style="flex:1"><button type="button" class="btn sm" data-gps="${id}">${ic('pin')}GPS</button></div><span class="hint" id="${id}-h"></span>`;
     else inp=`<input id="${id}" name="${k}" type="${t}" value="${esc(v)}">`;
     return `<div class="fld ${full?'full':''}"${when?` data-when="${when[0]}=${esc(when[1])}"${String(o[when[0]]??'')===when[1]?'':' hidden'}`:''}>${lab}${inp}${hint||when?`<span class="hint" id="${id}-h">${hint||''}</span>`:''}</div>`};
-  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><form class="modal" id="frm" novalidate><div class="mh"><h2>${title||(o.id?'Editar ':/^(Corte|Convenio|Documento|Pendiente)/.test(F.t)?'Nuevo ':'Nueva ')+F.t.toLowerCase()}</h2><button type="button" class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${F.f.map(fld).join('')}${extra}<div class="fld full"><span class="note" id="frmErr" style="color:var(--bad)"></span></div></div><div class="mf">${o.id?`<button type="button" class="btn danger" id="frmDel" style="margin-right:auto">${ic('trash')}Eliminar</button>`:''}<button type="button" class="btn" data-close="1">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
+  $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><form class="modal" id="frm" novalidate><div class="mh"><h2>${title||(o.id?'Editar ':/^(Corte|Convenio|Documento|Pendiente)/.test(F.t)?'Nuevo ':'Nueva ')+F.t.toLowerCase()}</h2><button type="button" class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${F.f.map(fld).join('')}${extra}<div class="fld full"><span class="note" id="frmErr" style="color:var(--bad)"></span></div></div><div class="mf">${o.id&&canDelete(col,byId(col,o.id)||o)?`<button type="button" class="btn danger" id="frmDel" style="margin-right:auto">${ic('trash')}Eliminar</button>`:''}<button type="button" class="btn" data-close="1">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
   const form=$('#frm');
   if(col==='pendientes'&&!isAdmin()){const el=form.elements.estado;if(el){el.disabled=true;el.closest('.fld').insertAdjacentHTML('beforeend','<span class="hint">Se cambia con la casilla de la lista; el cierre lo aprueba Infraestructura (gerente o coordinador regional).</span>')}}
   if(col==='estimaciones'&&!isAdmin())['estado','fechaPago'].forEach(k=>{const el=form.elements[k];if(!el)return;el.disabled=true;const f=el.closest('.fld');f.insertAdjacentHTML('beforeend',`<span class="hint">Solo Infraestructura (gerente o coordinador regional) puede cambiarlo.</span>`)});
   if(col==='documentos'){const tp=form.elements.tipo,fi=form.querySelector('[data-file]');const sync=()=>{if(!tp||!fi)return;const c=esCat(tp.value);if(c)fi.setAttribute('accept',XLS_ACC);else fi.removeAttribute('accept');const h=$('#fileH');if(h&&!fileBuf)h.textContent=c?'Solo hojas de cálculo: .xlsx, .xls, .xlsm, .ods o .csv. Este archivo servirá para cargar el catálogo y el avance por concepto.':(o.archivo?'Actual: '+o.archivo+'. Elige otro para reemplazarlo.':'Se guarda en este dispositivo y, si está activa la sincronización, en la nube.');if(c&&fileBuf&&!XLS_RE.test(fileBuf.name)){fileBuf=null;fi.value='';h.innerHTML='<span style="color:var(--bad)">El archivo elegido no es hoja de cálculo; elige otro.</span>'}};tp&&tp.addEventListener('change',sync);sync()}
   form.onsubmit=e=>{e.preventDefault();const out={...o};let miss=[];
-    F.f.forEach(([k,l,t,req,,,,when])=>{if(when&&String(form.elements[when[0]]?.value)!==when[1]){delete out[k];return}if(t==='asist'){out.asistentes=[...form.querySelectorAll('.as-row')].map(r=>({nombre:r.querySelector('[data-k=nombre]').value.trim(),cargo:r.querySelector('[data-k=cargo]').value.trim(),empresa:r.querySelector('[data-k=empresa]').value.trim()})).filter(a=>a.nombre);return}if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
+    F.f.forEach(([k,l,t,req,,,,when])=>{if(when&&String(form.elements[when[0]]?.value)!==when[1]){delete out[k];return}if(t==='asist'){out.asistentes=[...form.querySelectorAll('.as-row')].map(r=>({nombre:r.querySelector('[data-k=nombre]').value.trim(),cargo:r.querySelector('[data-k=cargo]').value.trim(),empresa:r.querySelector('[data-k=empresa]').value.trim()})).filter(a=>a.nombre);return}if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;if(t==='check'){out[k]=el.checked?'si':'';return}if(t==='unidad'){const v=el.value==='__otro'?String(form.elements[k+'_otro']?.value||'').trim():el.value;out[k]=v;if(req&&!v)miss.push(el.value==='__otro'?l+' (especifica cuál)':l);return}let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
     if(form.elements.acuerdos){out._acuerdos=form.elements.acuerdos.value;out._resp=form.elements.acResp.value;out._fecha=form.elements.acFecha.value}
     if(miss.length&&col!=='estimaciones'){$('#frmErr').textContent='Falta: '+miss.join(', ');return}
     if(col==='estimaciones'&&!isAdmin()){out.estado=o.estado||'integracion';out.fechaPago=o.fechaPago||''}
@@ -1215,6 +1257,7 @@ function openForm(col,obj,onSave,title,extra=''){const F=col==='pendientes'&&!is
   const syncWhen=()=>form.querySelectorAll('[data-when]').forEach(w=>{const[a,b]=w.dataset.when.split('=');w.hidden=String(form.elements[a]?.value)!==b});
   const refHint=()=>{const h=$('#f-respondeA-h');if(!h||!form.elements.respondeA)return;const n=form.elements.respondeA.value.trim();const r=n&&notaFolio(form.elements.obraId?.value||o.obraId,n);h.innerHTML=!n?'Escribe el número (folio) de la nota que contestas.':r?`<b>Nota ${r.folio} · ${esc(r.tipo)}</b> (${fD(r.fecha)}): ${esc(String(r.texto||'').slice(0,110))}${String(r.texto||'').length>110?'…':''}`:'<span style="color:var(--bad)">No hay nota aprobada con ese número en esta obra.</span>'};
   form.addEventListener('change',()=>{syncWhen();refHint()});form.addEventListener('input',e=>{$('#frmErr').textContent='';$('#frmErr').closest('.fld').classList.remove('err-box');if(e.target.name==='respondeA')refHint()});refHint();
+  form.querySelectorAll('[data-unid]').forEach(sel=>sel.addEventListener('change',()=>{const i=$('#'+sel.id+'-otro');i.hidden=sel.value!=='__otro';if(!i.hidden)i.focus()}));
   const d=$('#frmDel');if(d)d.onclick=()=>{if(d.dataset.sure){closeModal();onSave(null)}else{d.dataset.sure=1;d.textContent='Toca otra vez para eliminar'}};
   setTimeout(()=>{const f=form.querySelector('input:not([type=file]),textarea');if(f&&matchMedia('(min-width:861px)').matches)f.focus()},30)}
 function closeModal(){$('#modalRoot').innerHTML=''}
@@ -1225,7 +1268,7 @@ function confirmDo(msg,fn){$('#modalRoot').innerHTML=`<div class="ov" data-close
 /* ---------- Guardado por tipo ---------- */
 const curObra=()=>V.view==='obras'&&V.id?V.id:(V.obra||(D.obras.find(o=>o.estado==='ejecucion')||D.obras[0]||{}).id);
 function needObra(){if(!D.obras.length){toast('Primero registra una obra');ACT.newObra();return false}return true}
-function saver(col,msg,after){return o=>{const apm=o&&o._apMsg;if(o)delete o._apMsg;if(apm)setTimeout(()=>toast(apm),2700);if(o===null){del(col,lastEdit);render();toast('Eliminado');return}
+function saver(col,msg,after){return o=>{const apm=o&&o._apMsg;if(o)delete o._apMsg;if(apm)setTimeout(()=>toast(apm),2700);if(o===null){if(!canDelete(col,byId(col,lastEdit))){toast('No tienes permiso para eliminar este registro.');return}del(col,lastEdit);render();toast('Eliminado');return}
   if(!o.id)o.id=uid();
   if(col==='documentos'&&o._blob){fileSet(o.id,o._blob);delete o._blob}
   if(col==='bitacora'){if(!o.estado)o.estado=isAdmin()?'aprobada':'cargada';if(o.estado==='aprobada'&&!o.folio)o.folio=nextFolio(o.obraId)}
@@ -1252,6 +1295,8 @@ const ACT={
   clearDemo:()=>confirmDo('Se borrarán todas las obras de ejemplo y sus registros. ¿Continuar?',()=>{D.obras.filter(o=>o.ejemplo).forEach(o=>delObra(o.id));S.config.ejemplos=false;persist('config');go('panel');toast('Listo, ya puedes registrar tus obras')}),
   reseed:()=>confirmDo('Se agregarán 4 obras de ejemplo y se reemplazará lo que tengas en este dispositivo. ¿Continuar?',()=>{seed();go('panel')}),
   syncOff:()=>{S.sync.on=false;persist('sync');Sync.logout().then(()=>{Sync.set('off');U=S.config.ses&&S.usuarios.find(z=>z.id===S.config.ses)||null;render()});toast('Sincronización apagada')},
+  avPerm:async()=>{try{const r=await Notification.requestPermission();if(r==='granted'){toast('Notificaciones activadas');await notificar()}else toast('No se activaron las notificaciones')}catch(e){toast('Este navegador no permite notificaciones')}showAvisos()},
+  avTodo:()=>{const st=avSt();avisos().forEach(a=>{st.visto[a.k]=1;st.notif[a.k]=1});persist('config');updBell();showAvisos()},
   logout:()=>{if(S.sync.on&&S.sync.url)Sync.logout();else{U=null;S.config.ses='';persist('config');closeModal();V.view='panel';render()}},
   myPw:()=>{if(U)U={...U,cambiar:true,_vol:1};render()},
   pwCancel:()=>{U=S.usuarios.find(z=>z.id===S.config.ses)||null;render()},
@@ -1451,6 +1496,8 @@ document.addEventListener('click',e=>{const t=e.target;
   const dc=t.closest('[data-doc]');if(dc){showDoc(byId('documentos',dc.dataset.doc));return}
   const gp=t.closest('[data-gps]');if(gp){getGPS(gp.dataset.gps);return}
   if(t.closest('#net')){go('config');return}
+  if(t.closest('#bellBtn')){showAvisos();return}
+  const avk=t.closest('[data-av]');if(avk){abrirAviso(avk.dataset.av);return}
   if(t.closest('#userBtn')){go('config');return}
   if(t.closest('#fab')){if(V.view==='obras'&&V.id){const m=TAB_FAB[V.tab]||'newEv';const k=FAB_COL[m];if(k&&!canCreate(k)){toast('Solo puedes consultar esta información');return}ACT[m]()}else{const m=FAB[V.view];if(m)ACT[m]()}return}
 });
@@ -1466,7 +1513,7 @@ document.addEventListener('submit',async ev=>{const f=ev.target;
   if(f.id==='locLogin'){ev.preventDefault();const er=$('#lgErr');const usuario=f.usuario.value.trim().toLowerCase();const u=S.usuarios.find(z=>z.usuario===usuario);
     if(!usuario||!f.pw.value){er.textContent='Escribe tu usuario y contraseña.';return}
     if(!u||!await checkPw(u,f.pw.value)){er.textContent='Usuario o contraseña incorrectos.';f.pw.value='';return}
-    S.config.ses=u.id;S.config.lastUser=usuario;persist('config');U=u;V.obra='';V.view=isExt()?'bitacora':'panel';render();if(!u.cambiar)toast('Hola, '+u.nombre)}
+    S.config.ses=u.id;S.config.lastUser=usuario;persist('config');U=u;V.obra='';V.view=isExt()?'bitacora':'panel';render();setTimeout(()=>{notificar();if(!U||U.cambiar)return;const st=avSt();if(avisos().some(x=>!st.visto[x.k])&&!$('#modalRoot').innerHTML)showAvisos()},1200);if(!u.cambiar)toast('Hola, '+u.nombre)}
   if(f.id==='pwForm'){ev.preventDefault();const er=$('#pwErr');const a=f.pw1.value,b=f.pw2.value;
     if(a.length<8){er.textContent='Usa al menos 8 caracteres.';return}if(a!==b){er.textContent='Las dos contraseñas no coinciden.';return}if(a===PW_TEMP){er.textContent='Elige una distinta a la temporal.';return}
     const me=S.usuarios.find(z=>z.id===U.id);if(!me)return;me.pw=await hashPw(a);me.cambiar=false;saveUsers();U=me;render();toast('Contraseña guardada')}
