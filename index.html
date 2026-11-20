@@ -725,23 +725,31 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v29';
+const APP_VER='20-nov-2026 · v30';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
+/* Cierra la sesión (sin borrar datos) y vuelve a la pantalla de acceso */
+function bloquear(msg){U=null;S.config.ses='';S.config.cloudU=null;persist('config');if(Sync.cli){try{Sync.cli.auth.signOut({scope:'local'})}catch(e){}if(Sync.ch){try{Sync.cli.removeChannel(Sync.ch)}catch(e){}Sync.ch=null}Sync.set('auth')}closeModal();V.view='panel';render();if(msg)setTimeout(()=>toast(msg),300)}
+/* Verifica que el usuario siga dado de alta: si lo quitaron, se le cierra la sesión */
+function checkAlta(){if(!U)return;if(S.sync.on&&S.sync.url){Sync.vigente();return}if(!S.usuarios.some(z=>z.id===U.id))bloquear('Tu acceso fue dado de baja.')}
+let ocultoDesde=0;
+document.addEventListener('visibilitychange',()=>{if(document.hidden){ocultoDesde=Date.now();return}if(U&&ocultoDesde&&Date.now()-ocultoDesde>5*60*1000){bloquear('Por seguridad, vuelve a entrar con tu usuario y contraseña.');return}checkAlta()});
+setInterval(checkAlta,60*1000);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
   ready(){return this.cli&&this.st!=='auth'&&this.st!=='off'&&navigator.onLine},
   load(){if(window.supabase)return Promise.resolve(true);return new Promise(r=>{const s=document.createElement('script');s.src=SUPA_JS;s.onload=()=>r(!!window.supabase);s.onerror=()=>r(false);document.head.appendChild(s)})},
   async start(){const c=S.sync;if(!c.on||!c.url||!c.key)return this.set('off');if(!navigator.onLine)return this.set('sinred');
     this.set('conn');if(!await this.load())return this.set('err','No se pudo cargar el conector. Revisa tu conexión.');
-    try{if(!this.cli)this.cli=window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,storageKey:'co-auth'}});
+    try{if(!this.cli)this.cli=window.supabase.createClient(c.url,c.key,{auth:{persistSession:false,storageKey:'co-auth'}});
       const{data}=await this.cli.auth.getSession();if(!data||!data.session){U=null;S.config.cloudU=null;persist('config');render();return this.set('auth')}
       const email=String(data.session.user.email||'').toLowerCase();const pf=await this.cli.from('perfiles').select('*');if(pf.error)throw pf.error;
       this.perfiles=pf.data||[];const me=this.perfiles.find(x=>x.email===email);if(!me){U=null;S.config.cloudU=null;persist('config');render();return this.set('err','Tu correo '+email+' no tiene un rol asignado. Pide al coordinador de infraestructura que te dé de alta en Ajustes → Usuarios.')}
       U={id:email,email,nombre:me.nombre,rol:me.rol,obraId:me.obra_id||''};S.config.cloudU=U;persist('config');render();
       this.set('conn');await this.push();await this.pull();this.listen();if(this.st==='conn')this.set('live')}catch(e){this.set('err',e.message||String(e))}},
   async login(email,pw){S.sync.email=email;persist('sync');if(!await this.load())return'No se pudo cargar el conector.';
-    try{if(!this.cli)this.cli=window.supabase.createClient(S.sync.url,S.sync.key,{auth:{persistSession:true,storageKey:'co-auth'}});const{error}=await this.cli.auth.signInWithPassword({email,password:pw});if(error)return error.message;await this.start();return''}catch(e){return e.message||String(e)}},
+    try{if(!this.cli)this.cli=window.supabase.createClient(S.sync.url,S.sync.key,{auth:{persistSession:false,storageKey:'co-auth'}});const{error}=await this.cli.auth.signInWithPassword({email,password:pw});if(error)return error.message;await this.start();return''}catch(e){return e.message||String(e)}},
   async logout(){try{if(this.ch)await this.cli.removeChannel(this.ch);if(this.cli)await this.cli.auth.signOut()}catch(e){}this.ch=null;U=null;S.config.cloudU=null;persist('config');COLS.forEach(c=>{S[c]=[];persist(c)});S.cola=[];persist('cola');S.sync.last='';persist('sync');this.set('auth');render()},
+  async vigente(){if(!this.cli||!U||!navigator.onLine)return;try{const pf=await this.cli.from('perfiles').select('*');if(pf.error)return;this.perfiles=pf.data||[];if(!this.perfiles.some(x=>x.email===U.email))bloquear('Tu acceso fue dado de baja. Pide al coordinador de infraestructura que te dé de alta de nuevo.')}catch(e){}},
   kick(){clearTimeout(this.t);this.t=setTimeout(()=>{if(this.ready())this.push()},800)},
   async push(){if(this.busy||!this.cli)return;this.busy=true;try{
     for(const it of [...S.cola]){const o=it.del?null:byId(it.col,it.id);
@@ -1486,7 +1494,8 @@ window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h
   if(has===undefined){seed()}else{for(const c of COLS)S[c]=(await idbGet(c))||[];S.config={...S.config,...((await idbGet('config'))||{})};S.cola=(await idbGet('cola'))||[];S.sync={...S.sync,...((await idbGet('sync'))||{})}}
   if(S.config.ejemplos&&!S.config.catSeed&&!S.conceptos.length&&S.obras.some(o=>o.id==='o1'&&o.ejemplo)){seedCat();S.config.catSeed=1;persist('config');persist('conceptos');persist('avconc')}
   S.usuarios=(await idbGet('usuarios'))||[];if(!S.usuarios.length)seedUsers();await ensureCreds();
-  U=S.sync.on&&S.sync.url?(S.config.cloudU||null):(S.config.ses&&S.usuarios.find(z=>z.id===S.config.ses)||null);
+  /* Siempre se entra con usuario y contraseña: no se recuerda la sesión al abrir la app */
+  U=null;S.config.ses='';S.config.cloudU=null;persist('config');try{localStorage.removeItem('co-auth')}catch(e){}
   const h=location.hash.slice(1);if(NAV.some(n=>n[0]===h))V.view=h;
   render();updNet();
   if(!inClaude)Sync.start();
