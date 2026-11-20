@@ -225,7 +225,7 @@ td.r,th.r{text-align:right}
 .err-box .note{font-size:14px}
 .err-ov{z-index:80}
 .pm h3{font-size:12.5px;margin:12px 0 4px;color:#333}
-.pm .hi-res{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.pm .hi-res{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}
 .pm .hi-ch{font-size:10px;color:#555;margin-top:3px}
 .pm .inf-ob{border-top:2px solid #333;padding-top:8px;margin-top:18px}
 .pm .inf-res td{text-align:center;font-size:18px;font-weight:700}.pm .inf-res th{text-align:center}
@@ -708,7 +708,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v19';
+const APP_VER='20-nov-2026 · v20';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -911,7 +911,7 @@ estimaciones(){const obs=D.obras.filter(o=>!V.obra||o.id===V.obra);const rs=obs.
   <div class="card"><div class="card-h"><h2>Estimaciones</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">${chips([['','Todas'],...Object.entries(ES_EST).map(([k,v])=>[k,v[0]])])}${estTable(es,!V.obra)}</div></div>`},
 
 pendientes(){const it=D.pendientes.filter(p=>(!V.obra||p.obraId===V.obra)&&(V.f==='acuerdo'?p.origen==='acuerdo':V.f==='actividad'?p.origen!=='acuerdo':V.f==='vencido'?vencido(p):V.f==='cerrada'?p.estado==='cerrada':V.f==='porap'?PE_HECHO.includes(p.estado):p.estado!=='cerrada'));
-  return `${phead('Pendientes y acuerdos','Actividades por cerrar y acuerdos que salen de las minutas',obraSel()+`<button class="btn" data-act="informe">${ic('file')}Informe semanal</button>`+(canCreate('pendientes')?`<button class="btn pri hide-m" data-act="newPen">${ic('plus')}Nuevo pendiente</button>`:''))}${apPenCard()}
+  return `${phead('Pendientes y acuerdos','Actividades por cerrar y acuerdos que salen de las minutas',obraSel()+(isAdmin()?`<button class="btn" data-act="informe">${ic('file')}Informe semanal</button>`:'')+(canCreate('pendientes')?`<button class="btn pri hide-m" data-act="newPen">${ic('plus')}Nuevo pendiente</button>`:''))}${apPenCard()}
   ${chips([['','Abiertos'],['porap','Por aprobar'],['vencido','Vencidos'],['actividad','Actividades'],['acuerdo','Acuerdos de minuta'],['cerrada','Cerrados']])}
   <div class="card"><div class="card-b" style="padding-top:8px">${penList(sortPen(it),!V.obra)}</div></div>`},
 
@@ -1182,7 +1182,7 @@ async function pdfDoc(){if(!PV)return;toast('Generando PDF…');
 const lunesDe=f=>{const d=toD(f);const k=(d.getDay()+6)%7;return addDays(f,-k)};
 const fechaAt=p=>String(p.hechoEl||p.upd||'').slice(0,10);
 function semanasOpts(){const out=[];let l=lunesDe(HOY());for(let i=0;i<12;i++){out.push([l,`${i===0?'Esta semana · ':i===1?'Semana pasada · ':''}${fD(l)} al ${fD(addDays(l,6))}`]);l=addDays(l,-7)}return out}
-function informeForm(){const ob=V.obra||'';
+function informeForm(){if(!isAdmin())return;const ob=V.obra||'';
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:480px"><div class="mh"><h2>Informe semanal de pendientes</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr"><div class="fld"><label for="infSem">Semana (lunes a domingo)</label><select id="infSem">${semanasOpts().map(([v,l],i)=>`<option value="${v}" ${i===1?'selected':''}>${esc(l)}</option>`).join('')}</select></div><div class="fld"><label for="infObra">Obra</label><select id="infObra">${D.obras.length>1?'<option value="">Todas mis obras</option>':''}${D.obras.map(o=>`<option value="${o.id}" ${o.id===ob?'selected':''}>${esc(obraCorto(o.id))} · ${esc(o.nombre)}</option>`).join('')}</select></div><p class="note" style="margin:0">Muestra qué pendientes se atendieron en la semana y cuáles no, con vista previa para imprimir o descargar en PDF.</p></div><div class="mf"><button class="btn" data-close="1">Cancelar</button><button class="btn pri" id="infGo">${ic('file')}Ver informe</button></div></div></div>`;
   $('#infGo').onclick=()=>{const l=$('#infSem').value,o=$('#infObra').value;const ob=byId('obras',o);previewDoc(informeHTML(l,o),`Informe semanal pendientes ${ob?ob.numero+' ':''}${l}.pdf`.replace(/[\/:*?"<>|]+/g,'-'))}}
 function informeHTML(ini,obraId){const fin=addDays(ini,6);const F=fmtImp();const obras=D.obras.filter(o=>!obraId||o.id===obraId);
@@ -1230,7 +1230,7 @@ function histHTML(ini,fin,obraId,usuario,det){const F=fmtImp();
   return `<div class="pm">
   <div class="pm-h">${F.logo?`<img class="pm-img" src="${F.logo}" alt="Logo">`:`<div class="pm-logo">${LOGO.replace('<svg ','<svg width="40" height="40" color="#333" style="color:#333" ').replace(/currentColor/g,'#333')}</div>`}<div class="pm-hc">${F.empresa?`<b>${esc(F.empresa)}</b>`:''}${F.area?`<span>${esc(F.area)}</span>`:''}<div class="pm-k">Informe del historial de movimientos</div><h1>Del ${fD(ini)} al ${fD(fin)}</h1></div>${F.codigo?`<div class="pm-cod">${esc(F.codigo)}</div>`:''}</div>
   <table class="pm-t"><tr><th>Obra</th><td>${obraId?esc(obraCorto(obraId)):'Todas'}</td><th>Usuario</th><td>${esc(usuario||'Todos')}</td><th>Movimientos</th><td><b>${it.length}</b></td></tr></table>
-  ${it.length?`<div class="hi-res"><div>${mini('Por usuario',cuenta(h=>h.usuario))}</div><div>${mini('Por acción',cuenta(h=>h.accion))}</div><div>${mini('Por tipo de registro',cuenta(h=>h.tipo))}</div></div>${secs}`:'<p class="pm-p">No hubo movimientos en este periodo.</p>'}
+  ${it.length?`<div class="hi-res"><div>${mini('Por acción',cuenta(h=>h.accion))}</div><div>${mini('Por tipo de registro',cuenta(h=>h.tipo))}</div></div>${secs}`:'<p class="pm-p">No hubo movimientos en este periodo.</p>'}
   <div class="pm-pie">Impreso el ${fDT(isoT(new Date()))} por ${esc(U?U.nombre:'')} · Formato de muestra</div></div>`}
 function fitPaper(){const pp=$('#pvPaper');if(!pp)return;const w=pp.parentElement.clientWidth-24,full=816;const k=Math.min(1,w/full);pp.style.transform=k<1?`scale(${k})`:'';pp.style.marginLeft=k<1?'0':'';pp.style.marginBottom=k<1?`${-(pp.offsetHeight*(1-k))}px`:''}
 addEventListener('resize',fitPaper);
