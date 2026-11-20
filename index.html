@@ -500,6 +500,7 @@ const num=v=>{const n=parseFloat(String(v??'').replace(/[$,\s]/g,''));return isN
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 
 const OB_EST={ejecucion:['En ejecución','ok'],porIniciar:['Por iniciar','info'],suspendida:['Suspendida','warn'],terminada:['Terminada','off'],finiquitada:['Finiquitada','off']};
+const ES_TIPO={normal:'Normal',adicional:'Adicional',extraordinaria:'Extraordinaria'};const esTipo=e=>e.tipo||'normal';
 const ES_EST={integracion:['En integración','off'],revision:['En revisión','warn'],autorizada:['Autorizada','info'],pagada:['Pagada','ok'],devuelta:['Devuelta','bad']};
 const PE_EST={pendiente:['Pendiente','warn'],proceso:['En proceso','info'],porSup:['Hecho · revisa supervisión','info'],porAdm:['Hecho · por aprobar','info'],cerrada:['Cerrada','ok']};
 const PRIO={alta:['Alta','bad'],media:['Media','warn'],baja:['Baja','off']};
@@ -589,10 +590,12 @@ function checkEst(e){const o=byId('obras',e.obraId)||{};const hoy=HOY();const in
   if(e.estado==='pagada'&&!pago)errs.push('Para marcarla como pagada, captura la fecha de pago.');
   if(pago&&e.estado!=='pagada')errs.push('Tiene fecha de pago: cambia el estado a "Pagada" o borra la fecha.');
   if(['revision','autorizada'].includes(e.estado)&&!pres)errs.push('Captura la fecha de presentación para ponerla en revisión o autorizarla.');
-  const otras=S.estimaciones.filter(x=>x.obraId===e.obraId&&x.id!==e.id&&!x.deleted);
-  if(otras.some(x=>num(x.numero)===num(e.numero)))errs.push(`Ya existe la estimación ${e.numero} en esta obra.`);
+  /* Solo se comparan estimaciones del mismo tipo: Normal, Adicional y Extraordinaria pueden empalmar periodos entre sí */
+  const tp=esTipo(e),tl=ES_TIPO[tp].toLowerCase();const otras=S.estimaciones.filter(x=>x.obraId===e.obraId&&x.id!==e.id&&!x.deleted&&esTipo(x)===tp);
+  if(otras.some(x=>num(x.numero)===num(e.numero)))errs.push(`Ya existe la estimación ${tl} ${e.numero} en esta obra.`);
+  if(e.finiquito==='si'){const f=otras.find(x=>x.finiquito==='si'&&x.estado!=='devuelta');if(f)errs.push(`Ya hay una estimación finiquito ${tl} (No. ${f.numero}) en esta obra.`)}
   for(const x of otras.filter(x=>x.estado!=='devuelta'&&x.periodoFin)){const xi=x.periodoIni||x.periodoFin;
-    if(ini<=x.periodoFin&&fin>=xi){errs.push(`El periodo se empalma con la estimación ${x.numero} (${fD(xi)} – ${fD(x.periodoFin)}).`);continue}
+    if(ini<=x.periodoFin&&fin>=xi){errs.push(`El periodo se empalma con la estimación ${tl} ${x.numero} (${fD(xi)} – ${fD(x.periodoFin)}).`);continue}
     if(num(x.numero)<num(e.numero)&&xi>fin)errs.push(`La estimación ${x.numero} es anterior pero su periodo es posterior (${fD(xi)}). Revisa el número o las fechas.`);
     if(num(x.numero)>num(e.numero)&&x.periodoFin<ini)errs.push(`La estimación ${x.numero} es posterior pero su periodo es anterior (${fD(x.periodoFin)}). Revisa el número o las fechas.`)}
   return {errs,fut}}
@@ -741,7 +744,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v32';
+const APP_VER='20-nov-2026 · v33';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 /* Cierra la sesión (sin borrar datos) y vuelve a la pantalla de acceso */
 function bloquear(msg){U=null;S.config.ses='';S.config.cloudU=null;persist('config');if(Sync.cli){try{Sync.cli.auth.signOut({scope:'local'})}catch(e){}if(Sync.ch){try{Sync.cli.removeChannel(Sync.ch)}catch(e){}Sync.ch=null}Sync.set('auth')}closeModal();V.view='panel';render();if(msg)setTimeout(()=>toast(msg),300)}
@@ -1000,7 +1003,7 @@ function evGrid(items,showObra){if(!items.length)return empty('Sin evidencias. T
 
 function estTable(items,showObra){if(!items.length)return empty('Sin estimaciones registradas.','newEst','Registrar estimación');
   const rows=[...items].sort((a,b)=>String(b.periodoFin||'').localeCompare(String(a.periodoFin||''))||num(b.numero)-num(a.numero));
-  return `<div class="tbl-wrap"><table><thead><tr><th>No.</th>${showObra?'<th>Obra</th>':''}<th>Periodo</th><th class="r">Importe</th><th class="r">Amort. anticipo</th><th class="r">IVA</th><th class="r">Retenciones y penas</th><th class="r">Neto a pagar</th><th>Estado</th></tr></thead><tbody>${rows.map(e=>{const c=calcEst(e);return `<tr class="click" data-edit="estimaciones:${e.id}"><td class="num"><b>${esc(e.numero)}</b></td>${showObra?`<td>${esc(obraCorto(e.obraId))}</td>`:''}<td class="num">${fD(e.periodoIni)} – ${fD(e.periodoFin)}</td><td class="r num">${money(c.imp)}</td><td class="r num">${money(c.am)}</td><td class="r num">${money(c.iva)}</td><td class="r num">${money(num(e.retenciones)+num(e.penas))}</td><td class="r num"><b>${money(c.neto)}</b></td><td>${pill(ES_EST,e.estado)}${e.aprobFecha?' '+pill(AP_EST,e.aprobFecha):''}${e.aprobFecha==='rechazada'&&e.aprobNota?`<div class="note" style="white-space:normal;color:var(--bad)">${esc(e.aprobNota)}</div>`:''}</td></tr>`}).join('')}</tbody></table></div>`}
+  return `<div class="tbl-wrap"><table><thead><tr><th>No.</th>${showObra?'<th>Obra</th>':''}<th>Periodo</th><th class="r">Importe</th><th class="r">Amort. anticipo</th><th class="r">IVA</th><th class="r">Retenciones y penas</th><th class="r">Neto a pagar</th><th>Estado</th></tr></thead><tbody>${rows.map(e=>{const c=calcEst(e);return `<tr class="click" data-edit="estimaciones:${e.id}"><td class="num"><b>${esc(e.numero)}</b>${esTipo(e)!=='normal'?`<div class="sub">${ES_TIPO[esTipo(e)]}</div>`:''}${e.finiquito==='si'?'<div><span class="pill p-ok"><i></i>Finiquito</span></div>':''}</td>${showObra?`<td>${esc(obraCorto(e.obraId))}</td>`:''}<td class="num">${fD(e.periodoIni)} – ${fD(e.periodoFin)}</td><td class="r num">${money(c.imp)}</td><td class="r num">${money(c.am)}</td><td class="r num">${money(c.iva)}</td><td class="r num">${money(num(e.retenciones)+num(e.penas))}</td><td class="r num"><b>${money(c.neto)}</b></td><td>${pill(ES_EST,e.estado)}${e.aprobFecha?' '+pill(AP_EST,e.aprobFecha):''}${e.aprobFecha==='rechazada'&&e.aprobNota?`<div class="note" style="white-space:normal;color:var(--bad)">${esc(e.aprobNota)}</div>`:''}</td></tr>`}).join('')}</tbody></table></div>`}
 
 function sumGrid(r){return `<div class="sumgrid">
   <div><small>Monto vigente (sin IVA)</small><b>${mShort(r.vig)}</b></div>
@@ -1198,7 +1201,7 @@ const obraOpts=()=>D.obras.map(o=>[o.id,(o.aeropuerto?o.aeropuerto+' · ':'')+o.
 const FORMS={
   obras:{t:'Obra',f:[['numero','No. de contrato','text',1],['tipo','Tipo','select',0,['Obra','Supervisión','Proyecto ejecutivo','Servicios']],['nombre','Nombre de la obra','text',1,null,1],['aeropuerto','Aeropuerto','list',0,AEROS],['estado','Estado','select',0,Object.entries(OB_EST).map(([k,v])=>[k,v[0]])],['contratista','Contratista','text'],['supervision','Supervisión externa','text'],['residente','Residente de obra','text'],['monto','Monto del contrato (sin IVA)','money',1],['anticipo','Anticipo (%)','number'],['inicio','Fecha de inicio','date',1],['fin','Fecha de término','date',1],['notas','Notas','textarea',0,null,1]]},
   convenios:{t:'Convenio modificatorio',f:[['obraId','Obra','obra',1,null,1],['numero','Número','text',1],['fecha','Fecha','date',1],['tipo','Tipo','select',0,['Monto','Plazo','Monto y plazo','Reducción']],['monto','Monto (sin IVA, negativo si reduce)','money'],['dias','Días de ampliación','number'],['descripcion','Motivo','textarea',0,null,1]]},
-  estimaciones:{t:'Estimación',f:[['obraId','Obra','obra',1,null,1],['numero','No. de estimación','number',1],['estado','Estado','select',0,Object.entries(ES_EST).map(([k,v])=>[k,v[0]])],['periodoIni','Periodo del','date',1],['periodoFin','Periodo al','date',1],['importe','Importe ejecutado (sin IVA)','money',1],['amort','Amortización de anticipo','money',0,null,0,'Vacío = se calcula con el % de anticipo'],['retenciones','Retenciones','money'],['penas','Penas convencionales','money'],['fechaPres','Fecha de presentación','date'],['fechaPago','Fecha de pago','date'],['notas','Observaciones','textarea',0,null,1]]},
+  estimaciones:{t:'Estimación',f:[['obraId','Obra','obra',1,null,1],['tipo','Tipo de estimación','select',1,Object.entries(ES_TIPO)],['numero','No. de estimación','number',1,null,0,'El número es consecutivo por tipo (Normal, Adicional, Extraordinaria).'],['finiquito','Finiquito','check',0,'Es estimación finiquito'],['estado','Estado','select',0,Object.entries(ES_EST).map(([k,v])=>[k,v[0]])],['periodoIni','Periodo del','date',1],['periodoFin','Periodo al','date',1],['importe','Importe ejecutado (sin IVA)','money',1],['amort','Amortización de anticipo','money',0,null,0,'Vacío = se calcula con el % de anticipo'],['retenciones','Retenciones','money'],['penas','Penas convencionales','money'],['fechaPres','Fecha de presentación','date'],['fechaPago','Fecha de pago','date'],['notas','Observaciones','textarea',0,null,1]]},
   conceptos:{t:'Concepto',f:CONC_F},
   conceptosX:{t:'Precio extraordinario',f:[['clave','Clave del concepto','text',1],['unidad','Unidad','unidad',1],['descripcion','Descripción','textarea',1,null,1],['cantidad','Cantidad','number',1],['pu','Precio unitario solicitado (sin IVA)','money',1,null,0,'El precio autorizado se captura al autorizar la orden.'],['justif','Justificación','textarea',1,null,1]]},
   ordenes:{t:'Orden de cambio',f:[['obraId','Obra','obra',1,null,1],['titulo','Asunto','text',1,null,1],['fecha','Fecha','date',1],['solicita','Solicita (empresa o persona)','text',0],['motivo','Motivo y justificación','textarea',1,null,1]]},
