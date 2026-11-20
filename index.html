@@ -103,6 +103,8 @@ a{color:var(--accent)}
 .kpi .lb{color:var(--fg);font-size:14.5px}
 .kpi .v{font-family:var(--f-display);font-size:30px;font-weight:700;line-height:1.1;margin-top:4px}
 .kpi .d{font-size:13px;margin-top:4px;font-weight:600}
+.kpi>div:last-child{min-width:0}.kpi .v.sm{font-size:clamp(15px,2.1vw,24px);overflow-wrap:anywhere}
+@media (max-width:420px){.kpi .v.sm{font-size:15px!important}.kpi:has(.v.sm) .ic{width:34px;height:34px}.kpi:has(.v.sm){gap:10px;padding:14px}}
 .kpi .d small{display:block;color:var(--muted);font-weight:400;font-size:12px}
 .up{color:var(--ok)} .down{color:var(--bad)}
 .tint-info{background:color-mix(in srgb,var(--info) 13%,transparent);color:var(--info)}
@@ -464,7 +466,7 @@ const toD=s=>s?new Date(String(s).length<=10?s+'T00:00':s):null;
 const fD=s=>{const d=toD(s);if(!d||isNaN(d))return'—';return `${String(d.getDate()).padStart(2,'0')}/${MESES[d.getMonth()]}/${d.getFullYear()}`};
 const fDT=s=>{const d=toD(s);if(!d||isNaN(d))return'—';return fD(s)+(String(s).length>10?` ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`:'')};
 const money=n=>'$'+Number(n||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
-const mShort=n=>{n=Number(n||0);const a=Math.abs(n);return a>=1e6?'$'+(n/1e6).toLocaleString('es-MX',{maximumFractionDigits:2})+' M':a>=1e3?'$'+(n/1e3).toLocaleString('es-MX',{maximumFractionDigits:1})+' mil':money(n)};
+const mShort=n=>money(n);
 const pct=n=>(Number(n||0)).toLocaleString('es-MX',{maximumFractionDigits:1})+'%';
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const isoT=d=>iso(d)+`T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -532,8 +534,8 @@ const CONTRA_VE=['obras','bitacora','avances','estimaciones','convenios','pendie
 function visible(col,x){if(col==='ajustes'||isAdmin())return true;if(!U)return false;const oid=col==='obras'?x.id:x.obraId;if(!oid||oid!==U.obraId||col==='historial')return false;if(isContra())return CONTRA_VE.includes(col);if(isExt())return col==='obras'||col==='bitacora';return true}
 const D=new Proxy({},{get:(_,col)=>(S[col]||[]).filter(x=>visible(col,x))});
 const canCat=()=>isAdmin()||(!!U&&U.rol==='supervision');
-function canCreate(col){if(isAdmin())return true;if(!U)return false;if(col==='catalogoBase')return canCat();if(isExt())return col==='bitacora'||(isSup()&&SUP_CARGA.includes(col));return col!=='obras'&&col!=='historial'}
-function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='conceptos')return x.extra?isSup()&&x.exEstado!=='autorizado':canCat();if(col==='ordenes')return isSup()&&['borrador','rechazada'].includes(x.estado);if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
+function canCreate(col){if(isAdmin())return true;if(!U)return false;if(col==='catalogoBase')return canCat();if(isExt())return col==='bitacora'||(isSup()&&(SUP_CARGA.includes(col)||col==='pendientes'));return col!=='obras'&&col!=='historial'}
+function canEdit(col,x){if(!x||!visible(col,x))return false;if(isAdmin())return true;if(col==='conceptos')return x.extra?isSup()&&x.exEstado!=='autorizado':canCat();if(col==='ordenes')return isSup()&&['borrador','rechazada'].includes(x.estado);if(col==='bitacora')return x.estado==='cargada'&&x.porId===U.id;if(col==='pendientes'&&isSup())return x.porId===U.id&&x.estado!=='cerrada';if(isExt())return isSup()&&SUP_CARGA.includes(col);return col!=='historial'}
 const COL_L={ordenes:'Orden de cambio',conceptos:'Concepto de catálogo',avconc:'Avance de concepto',obras:'Obra',convenios:'Convenio',estimaciones:'Estimación',avances:'Corte de avance',pendientes:'Pendiente',minutas:'Minuta',bitacora:'Nota de bitácora',evidencias:'Evidencia',documentos:'Documento'};
 const refTxt=(col,o)=>col==='ordenes'?'Orden '+(o.folio||'')+' · '+String(o.titulo||'').slice(0,60):col==='conceptos'?(o.extra?'Extraordinario ':'Concepto ')+(o.clave||'')+' · '+String(o.descripcion||'').slice(0,60):col==='avconc'?'Avance de '+((byId('conceptos',o.conceptoId)||{}).clave||'concepto')+' del '+fD(o.fecha):col==='estimaciones'?'Estimación '+o.numero:col==='avances'?'Corte del '+fD(o.fecha):col==='bitacora'?(o.folio?'Nota '+o.folio:'Nota sin folio')+' · '+(o.tipo||''):col==='convenios'?'Convenio '+(o.numero||''):String(o.titulo||o.nombre||o.concepto||o.numero||'');
 const SKIP=['upd','por','porId','ruta','mime','size','ejemplo','aprobadoPor','fechaAprob','aprobKey','aprobEl','hechoEl'];
@@ -703,17 +705,17 @@ create policy "crear" on registros for insert to authenticated with check (
   es_admin()
   or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra()
       and (col = 'historial' or (col = 'bitacora' and data->>'estado' = 'cargada')))
-  or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and (col in ('avances','estimaciones','conceptos','avconc','ordenes') or (col = 'documentos' and data->>'ordenId' is not null))));
+  or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and (col in ('avances','estimaciones','conceptos','avconc','ordenes','pendientes') or (col = 'documentos' and data->>'ordenId' is not null))));
 create policy "editar" on registros for update to authenticated
   using (
     es_admin()
     or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada')
-    or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and (col in ('avances','estimaciones','conceptos','avconc','ordenes') or (col = 'documentos' and data->>'ordenId' is not null)))
+    or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and (col in ('avances','estimaciones','conceptos','avconc','ordenes','pendientes') or (col = 'documentos' and data->>'ordenId' is not null)))
     or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col = 'pendientes'))
   with check (
     es_admin()
     or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col = 'bitacora' and data->>'estado' = 'cargada')
-    or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and (col in ('avances','estimaciones','conceptos','avconc','ordenes') or (col = 'documentos' and data->>'ordenId' is not null)))
+    or (mi_rol() in ('supervision','supervisor') and obra_id = mi_obra() and (col in ('avances','estimaciones','conceptos','avconc','ordenes','pendientes') or (col = 'documentos' and data->>'ordenId' is not null)))
     or (mi_rol() in ('contratista','residente','supervision','supervisor') and obra_id = mi_obra() and col = 'pendientes'));
 
 -- Tu propio usuario como coordinador (cambia el correo y el nombre):
@@ -723,7 +725,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v26';
+const APP_VER='20-nov-2026 · v28';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -820,7 +822,7 @@ function catTab(o){const cs=ofObra('conceptos',o.id);const base=cs.filter(c=>!c.
   <div class="card"><div class="card-h"><h2>Catálogo de conceptos</h2><div class="row">${canCat()?`<button class="btn sm" data-act="newConc">${ic('plus')}Concepto</button>`:''}</div></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px">${chips([['','Todos'],['near','Por terminar'],['bad','Excedidos'],['ok','Terminados'],['off','Sin avance']])}${leg}
     ${enCat.length?(rows?`<div class="tbl-wrap"><table class="ctbl">${head}<tbody>${rows}</tbody></table></div>`:empty('Ningún concepto con ese filtro.')):empty(canCat()?'Aún no hay catálogo. Agrega los conceptos por partida y subpartida.':'Aún no se ha cargado el catálogo de esta obra.',canCat()?'newConc':'',canCat()?'Agregar concepto':'')}
     <p class="note" style="margin:0">Toca un concepto para ver su historial o registrar avance. El porcentaje de partidas y subpartidas se calcula por importe.</p></div></div>
-  <div class="card"><div class="card-h"><h2>Extraordinarios en trámite</h2><button class="btn sm" data-tab="ordenes">Ir a órdenes de cambio</button></div><div class="card-b">${pend.length?`<div class="tbl-wrap"><table class="ctbl"><thead><tr><th>Clave</th><th>Descripción</th><th>Estado</th><th>Avance</th><th>Unidad</th><th class="r">Cantidad</th><th class="r">P.U. solicitado</th><th class="r">Importe</th><th class="r">Importe ejecutado</th></tr></thead><tbody>${exRows}</tbody></table></div>`:'<div class="empty">No hay extraordinarios en trámite.</div>'}<p class="note" style="margin:8px 0 0">Los extraordinarios se solicitan en una orden de cambio. Al autorizarla, entran al final del catálogo en la partida Extraordinarios con el precio autorizado.</p></div></div>`}
+  <div class="card"><div class="card-h"><h2>Extraordinarios en trámite</h2><button class="btn sm" data-tab="ordenes">Ir a órdenes de cambio</button></div><div class="card-b">${(()=>{const oe=isAdmin()?ofObra('ordenes',o.id).filter(x=>x.estado==='enviada'):[];return oe.length?`<p class="note" style="margin:0 0 6px"><b>Órdenes por autorizar:</b> captura el precio autorizado y autoriza aquí.</p>${ocList(oe,false)}`:''})()}${pend.length?`<div class="tbl-wrap"><table class="ctbl"><thead><tr><th>Clave</th><th>Descripción</th><th>Estado</th><th>Avance</th><th>Unidad</th><th class="r">Cantidad</th><th class="r">P.U. solicitado</th><th class="r">Importe</th><th class="r">Importe ejecutado</th></tr></thead><tbody>${exRows}</tbody></table></div>`:'<div class="empty">No hay extraordinarios en trámite.</div>'}<p class="note" style="margin:8px 0 0">Los extraordinarios se solicitan en una orden de cambio. Al autorizarla, entran al final del catálogo en la partida Extraordinarios con el precio autorizado.</p></div></div>`}
 function showConc(c){if(!c)return;const e=ejecDe(c.id),q=num(c.cantidad),p=pctOf(e,q);const hs=D.avconc.filter(a=>a.conceptoId===c.id).sort((a,b)=>a.fecha<b.fecha?-1:1);let acc=0;
   const puede=canCreate('avconc')&&cuentaC(c);
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><div class="modal" style="max-width:760px"><div class="mh"><h2>${esc(c.clave||'')} · ${c.extra?'Precio extraordinario':'Concepto'}</h2><button class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb" style="grid-template-columns:1fr">
@@ -922,9 +924,10 @@ const demoBanner=()=>S.config.ejemplos&&isAdmin()?`<div class="banner"><span>Est
 
 function penList(items,showObra){if(!items.length)return empty('No hay pendientes aquí.');
   return `<div class="lst">${items.map(p=>{const v=vencido(p);const h=PE_HECHO.includes(p.estado);const mk=canMark(p);return `<div class="li ${p.estado==='cerrada'?'done':''}"><button class="ck-btn${h?' half':''}${mk?'':' ro'}" data-toggle="${p.id}" aria-pressed="${p.estado==='cerrada'?'true':h?'mixed':'false'}" aria-label="${mk?'Marcar como hecho':'Solo la persona asignada puede marcarlo'}">${p.estado==='cerrada'||h?ic('tick'):''}</button>
-    <div style="min-width:0"><b>${esc(p.titulo)}</b><div class="sub">${p.origen==='acuerdo'?'<span class="folio">Acuerdo</span> ':''}${p.asignadoId?'Asignado a '+esc(userNom(p.asignadoId)||'usuario'):esc(p.responsable||'Sin asignar')} · compromiso <span class="num" style="${v?'color:var(--bad);font-weight:600':''}">${fD(p.compromiso)}${v?' (vencido)':''}</span>${showObra?' · '+esc(obraCorto(p.obraId)):''}</div><div class="row" style="margin-top:6px">${pill(PRIO,p.prioridad)}${pill(PE_EST,p.estado)}</div>${h&&p.hechoPor?`<div class="sub">Marcado como hecho por ${esc(p.hechoPor)}${p.revSupPor&&p.estado==='porAdm'?' · visto bueno de '+esc(p.revSupPor):''}</div>`:''}${p.estado==='proceso'&&p.rechazoNota?`<div class="sub" style="color:var(--bad)">Regresado por ${esc(p.rechazoPor||'')}: ${esc(p.rechazoNota)}</div>`:''}${canApPen(p)?`<div class="row" style="margin-top:8px"><button class="btn sm" data-penap="${p.id}" data-acc="no">Regresar</button><button class="btn sm pri" data-penap="${p.id}" data-acc="ok">${isAdmin()?'Aprobar y cerrar':'Dar visto bueno'}</button></div>`:''}</div>
+    <div style="min-width:0"><b>${esc(p.titulo)}</b><div class="sub">${p.origen==='acuerdo'?'<span class="folio">Acuerdo</span> ':''}${p.asignadoId?'Asignado a '+esc(userNom(p.asignadoId)||'usuario'):esc(p.responsable||'Sin asignar')} · compromiso <span class="num" style="${v?'color:var(--bad);font-weight:600':''}">${fD(p.compromiso)}${v?' (vencido)':''}</span>${showObra?' · '+esc(obraCorto(p.obraId)):''}</div><div class="row" style="margin-top:6px">${pill(PRIO,p.prioridad)}${pill(PE_EST,p.estado)}${sinAsig(p)?'<span class="pill p-bad"><i></i>Sin asignar</span>':''}</div>${h&&p.hechoPor?`<div class="sub">Marcado como hecho por ${esc(p.hechoPor)}${p.revSupPor&&p.estado==='porAdm'?' · visto bueno de '+esc(p.revSupPor):''}</div>`:''}${p.estado==='proceso'&&p.rechazoNota?`<div class="sub" style="color:var(--bad)">Regresado por ${esc(p.rechazoPor||'')}: ${esc(p.rechazoNota)}</div>`:''}${canApPen(p)?`<div class="row" style="margin-top:8px"><button class="btn sm" data-penap="${p.id}" data-acc="no">Regresar</button><button class="btn sm pri" data-penap="${p.id}" data-acc="ok">${isAdmin()?'Aprobar y cerrar':'Dar visto bueno'}</button></div>`:''}</div>
     ${canEdit('pendientes',p)?`<button class="x" data-edit="pendientes:${p.id}" aria-label="Editar">${ic('edit')}</button>`:'<span></span>'}</div>`}).join('')}</div>`}
-const sortPen=a=>[...a].sort((x,y)=>(x.estado==='cerrada')-(y.estado==='cerrada')||String(x.compromiso).localeCompare(String(y.compromiso)));
+const sinAsig=p=>!p.asignadoId&&p.estado!=='cerrada';
+const sortPen=a=>[...a].sort((x,y)=>(x.estado==='cerrada')-(y.estado==='cerrada')||sinAsig(y)-sinAsig(x)||String(x.compromiso).localeCompare(String(y.compromiso)));
 
 const BIT_EST={cargada:['Cargada','off'],revision:['En revisión','warn'],aprobada:['Aprobada','ok'],rechazada:['Rechazada','bad']};
 function bitList(items,showObra){if(!items.length)return empty('Sin notas de bitácora.');
@@ -1033,9 +1036,9 @@ estimaciones(){const obs=D.obras.filter(o=>!V.obra||o.id===V.obra);const rs=obs.
   <tr><td><b>Total</b></td><td class="r num"><b>${money(tv)}</b></td><td class="r num"><b>${money(te)}</b></td><td class="r num"><b>${pct(tv?te/tv*100:0)}</b></td><td class="r num"><b>${money(T('aut'))}</b></td><td class="r num"><b>${money(T('pag'))}</b></td><td class="r num"><b>${money(T('tram'))}</b></td><td class="r num"><b>${money(T('porAmort'))}</b></td><td class="r num"><b>${money(T('saldo'))}</b></td></tr></tbody></table></div>`:empty('Sin obras.')}</div></div>
   <div class="card"><div class="card-h"><h2>Estimaciones</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">${chips([['','Todas'],...Object.entries(ES_EST).map(([k,v])=>[k,v[0]])])}${estTable(es,!V.obra)}</div></div>`},
 
-pendientes(){const it=D.pendientes.filter(p=>(!V.obra||p.obraId===V.obra)&&(V.f==='acuerdo'?p.origen==='acuerdo':V.f==='actividad'?p.origen!=='acuerdo':V.f==='vencido'?vencido(p):V.f==='cerrada'?p.estado==='cerrada':V.f==='porap'?PE_HECHO.includes(p.estado):p.estado!=='cerrada'));
+pendientes(){const it=D.pendientes.filter(p=>(!V.obra||p.obraId===V.obra)&&(V.f==='acuerdo'?p.origen==='acuerdo':V.f==='actividad'?p.origen!=='acuerdo':V.f==='vencido'?vencido(p):V.f==='cerrada'?p.estado==='cerrada':V.f==='porap'?PE_HECHO.includes(p.estado):V.f==='sinasig'?sinAsig(p):p.estado!=='cerrada'));
   return `${phead('Pendientes y acuerdos','Actividades por cerrar y acuerdos que salen de las minutas',obraSel()+(isAdmin()?`<button class="btn" data-act="informe">${ic('file')}Informe semanal</button>`:'')+(canCreate('pendientes')?`<button class="btn pri hide-m" data-act="newPen">${ic('plus')}Nuevo pendiente</button>`:''))}${apPenCard()}
-  ${chips([['','Abiertos'],['porap','Por aprobar'],['vencido','Vencidos'],['actividad','Actividades'],['acuerdo','Acuerdos de minuta'],['cerrada','Cerrados']])}
+  ${chips([['','Abiertos'],['porap','Por aprobar'],['vencido','Vencidos'],['sinasig','Sin asignar'],['actividad','Actividades'],['acuerdo','Acuerdos de minuta'],['cerrada','Cerrados']])}
   <div class="card"><div class="card-b" style="padding-top:8px">${penList(sortPen(it),!V.obra)}</div></div>`},
 
 minutas(){const it=ofObra('minutas',V.obra);return `${phead('Minutas','Reuniones de obra y los acuerdos que generan',obraSel()+(canCreate('minutas')?`<button class="btn pri hide-m" data-act="newMin">${ic('plus')}Nueva minuta</button>`:''))}<div class="card"><div class="card-b" style="padding-top:8px">${minList(it,!V.obra)}</div></div>`},
@@ -1158,7 +1161,7 @@ let photoBuf=[],fileBuf=null,photoMax=0;
 const pvHtml=()=>photoBuf.map((p,i)=>`<span class="pv-it"><img src="${p}" alt="Foto ${i+1}"><button type="button" class="pv-x" data-pvdel="${i}" aria-label="Quitar foto ${i+1}">✕</button></span>`).join('');
 const asList=m=>Array.isArray(m.asistentes)?m.asistentes:String(m.asistentes||'').split(/[\n,;]+/).map(t=>t.trim()).filter(Boolean).map(nombre=>({nombre,cargo:'',empresa:''}));
 const asRow=a=>`<div class="as-row"><input data-k="nombre" placeholder="Nombre" aria-label="Nombre" value="${esc(a.nombre)}"><input data-k="cargo" placeholder="Cargo" aria-label="Cargo" value="${esc(a.cargo)}"><input data-k="empresa" placeholder="Empresa o área" aria-label="Empresa o área" value="${esc(a.empresa)}"><button type="button" class="x" data-asdel="1" aria-label="Quitar asistente">${ic('trash')}</button></div>`;
-function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...obj};photoBuf=[...(o.fotos||[])];fileBuf=null;
+function openForm(col,obj,onSave,title,extra=''){const F=col==='pendientes'&&!isAdmin()?{...FORMS.pendientes,f:FORMS.pendientes.f.filter(x=>x[0]!=='estado')}:FORMS[col];const o={...obj};photoBuf=[...(o.fotos||[])];fileBuf=null;
   const fld=([k,l,t,req,opts,full,hint,when])=>{const v=o[k]??'';const id='f-'+k;const lab=`<label for="${id}">${l}${req?' *':''}</label>`;let inp;
     if(t==='select')inp=`<select id="${id}" name="${k}">${(typeof opts==='function'?opts(o):opts).map(x=>{const[a,b]=Array.isArray(x)?x:[x,x];return `<option value="${esc(a)}" ${String(v)===String(a)?'selected':''}>${esc(b)}</option>`}).join('')}</select>`;
     else if(t==='obra')inp=`<select id="${id}" name="${k}">${obraOpts().map(([a,b])=>`<option value="${a}" ${v===a?'selected':''}>${esc(b)}</option>`).join('')}</select>`;
