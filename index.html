@@ -223,6 +223,11 @@ td.r,th.r{text-align:right}
 .pv-it{position:relative;display:inline-block}
 .err-box{background:color-mix(in srgb,var(--bad) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:8px;padding:10px 12px}
 .err-box .note{font-size:14px}
+.err-ov{z-index:80}
+.err-pop{max-width:520px}
+.err-pop .err-pb{padding:14px 20px;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.err-pop .err-pb p{margin:0}
+.err-pop .err-list li{margin:4px 0}
 .err-list{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-weight:500}
 .err-fut{display:block;margin-top:8px;color:var(--fg)}
 .ap-card{border-color:color-mix(in srgb,var(--warn,#c98a00) 45%,var(--line))}
@@ -541,6 +546,7 @@ function checkEst(e){const o=byId('obras',e.obraId)||{};const hoy=HOY();const in
     if(num(x.numero)>num(e.numero)&&x.periodoFin<ini)errs.push(`La estimación ${x.numero} es posterior pero su periodo es anterior (${fD(x.periodoFin)}). Revisa el número o las fechas.`)}
   return {errs,fut}}
 /* Estimaciones con fecha posterior a hoy esperando aprobación del gerente o del coordinador */
+function errPop(tit,lst,extra=''){document.getElementById('errPop')?.remove();const d=document.createElement('div');d.id='errPop';d.className='ov err-ov';d.innerHTML=`<div class="modal err-pop" role="alertdialog" aria-modal="true" aria-labelledby="errPopT"><div class="mh"><h2 id="errPopT">${esc(tit)}</h2></div><div class="err-pb"><p>Revisa y corrige lo siguiente; después podrás guardar:</p><ol class="err-list">${lst.map(m=>`<li>${esc(m)}</li>`).join('')}</ol>${extra}</div><div class="mf"><button type="button" class="btn pri" id="errPopOk">Entendido, voy a corregir</button></div></div>`;document.body.appendChild(d);const cl=()=>d.remove();d.querySelector('#errPopOk').onclick=cl;d.addEventListener('click',e=>{if(e.target===d)cl()});d.querySelector('#errPopOk').focus()}
 const cuentaEst=e=>e.estado!=='devuelta'&&!['pendiente','rechazada'].includes(e.aprobFecha);
 const estPorAprobar=()=>D.estimaciones.filter(e=>e.aprobFecha==='pendiente');
 const AP_EST={pendiente:['Fecha por aprobar','warn'],aprobada:['Fecha aprobada','ok'],rechazada:['Fecha rechazada','bad']};
@@ -683,7 +689,7 @@ insert into storage.buckets(id,name,public) values('documentos','documentos',fal
 drop policy if exists "documentos equipo" on storage.objects;
 create policy "documentos equipo" on storage.objects for all to authenticated
   using (bucket_id='documentos') with check (bucket_id='documentos');`;
-const APP_VER='20-nov-2026 · v16';
+const APP_VER='20-nov-2026 · v17';
 const inClaude=/claude|anthropic|claudeusercontent/.test(location.hostname);
 const Sync={cli:null,ch:null,st:'off',perfiles:[],msg:'',busy:false,t:null,
   set(st,msg){this.st=st;this.msg=msg||'';updNet();const el=$('#syncSt');if(el)el.outerHTML=stPill();const m=$('#syncMsg');if(m){m.textContent=this.msg;m.parentElement.hidden=!this.msg}},
@@ -998,12 +1004,16 @@ function openForm(col,obj,onSave,title,extra=''){const F=FORMS[col];const o={...
     return `<div class="fld ${full?'full':''}"${when?` data-when="${when[0]}=${esc(when[1])}"${String(o[when[0]]??'')===when[1]?'':' hidden'}`:''}>${lab}${inp}${hint||when?`<span class="hint" id="${id}-h">${hint||''}</span>`:''}</div>`};
   $('#modalRoot').innerHTML=`<div class="ov" data-close="1"><form class="modal" id="frm" novalidate><div class="mh"><h2>${title||(o.id?'Editar ':/^(Corte|Convenio|Documento|Pendiente)/.test(F.t)?'Nuevo ':'Nueva ')+F.t.toLowerCase()}</h2><button type="button" class="x" data-close="1" aria-label="Cerrar">${ic('close')}</button></div><div class="mb">${F.f.map(fld).join('')}${extra}<div class="fld full"><span class="note" id="frmErr" style="color:var(--bad)"></span></div></div><div class="mf">${o.id?`<button type="button" class="btn danger" id="frmDel" style="margin-right:auto">${ic('trash')}Eliminar</button>`:''}<button type="button" class="btn" data-close="1">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
   const form=$('#frm');
+  if(col==='estimaciones'&&!isAdmin())['estado','fechaPago'].forEach(k=>{const el=form.elements[k];if(!el)return;el.disabled=true;const f=el.closest('.fld');f.insertAdjacentHTML('beforeend',`<span class="hint">Solo el gerente o el coordinador de infraestructura pueden cambiarlo.</span>`)});
   form.onsubmit=e=>{e.preventDefault();const out={...o};let miss=[];
     F.f.forEach(([k,l,t,req,,,,when])=>{if(when&&String(form.elements[when[0]]?.value)!==when[1]){delete out[k];return}if(t==='asist'){out.asistentes=[...form.querySelectorAll('.as-row')].map(r=>({nombre:r.querySelector('[data-k=nombre]').value.trim(),cargo:r.querySelector('[data-k=cargo]').value.trim(),empresa:r.querySelector('[data-k=empresa]').value.trim()})).filter(a=>a.nombre);return}if(t==='photos'){out.fotos=photoBuf;if(req&&!photoBuf.length)miss.push(l);return}if(t==='file'){if(!o.id&&!fileBuf&&req)miss.push(l);return}const el=form.elements[k];if(!el)return;let v=el.value.trim();if(t==='money'||t==='number')v=v===''?'':num(v);out[k]=v;if(req&&(v===''||v==null))miss.push(l)});
     if(form.elements.acuerdos){out._acuerdos=form.elements.acuerdos.value;out._resp=form.elements.acResp.value;out._fecha=form.elements.acFecha.value}
-    if(miss.length){$('#frmErr').textContent='Falta: '+miss.join(', ');return}
-    if(col==='estimaciones'){const r=checkEst(out);const er=$('#frmErr');
-      if(r.errs.length){er.innerHTML=`<b>⚠ ${r.errs.length===1?'Hay 1 problema':'Hay '+r.errs.length+' problemas'} con las fechas:</b><ol class="err-list">${r.errs.map(m=>`<li>${esc(m)}</li>`).join('')}</ol>${r.fut.length?`<span class="err-fut">Además, como ${esc(r.fut.join(' y '))}, al corregir lo anterior se enviará a aprobación.</span>`:''}`;er.closest('.fld').classList.add('err-box');try{er.scrollIntoView({block:'center',behavior:'smooth'})}catch(_){}return}
+    if(miss.length&&col!=='estimaciones'){$('#frmErr').textContent='Falta: '+miss.join(', ');return}
+    if(col==='estimaciones'&&!isAdmin()){out.estado=o.estado||'integracion';out.fechaPago=o.fechaPago||''}
+    if(col==='estimaciones'){const r=checkEst(out);const er=$('#frmErr');const lst=[...(miss.length?['Falta capturar: '+miss.join(', ')+'.']:[]),...r.errs];
+      if(lst.length){const tit=`⚠ ${lst.length===1?'Hay 1 problema':'Hay '+lst.length+' problemas'} por corregir`;const fut=r.fut.length?`<p class="err-fut">Además, como ${esc(r.fut.join(' y '))}, al corregir lo anterior se enviará a aprobación del gerente o del coordinador de infraestructura.</p>`:'';
+        er.innerHTML=`<b>${tit}:</b><ol class="err-list">${lst.map(m=>`<li>${esc(m)}</li>`).join('')}</ol>`;er.closest('.fld').classList.add('err-box');
+        errPop(tit,lst,fut);return}
       const key=[out.periodoIni,out.periodoFin,out.fechaPres].join('|');
       if(r.fut.length){if(isAdmin()){out.aprobFecha='aprobada';out.aprobPor=U.nombre;out.aprobEl=new Date().toISOString();out.aprobKey=key;out._apMsg='Guardada. Como tiene fechas posteriores a hoy, quedó aprobada por ti.'}
         else if(!(o.aprobFecha==='aprobada'&&o.aprobKey===key)){out.aprobFecha='pendiente';out.aprobKey=key;out.aprobMotivo='Fechas posteriores a hoy: '+r.fut.join(' y ')+'.';out.aprobPor='';out.aprobNota='';out._apMsg='Guardada y enviada a aprobación: tiene fechas posteriores a hoy. La puede aprobar el gerente o el coordinador de infraestructura.'}}
